@@ -8,18 +8,28 @@ defmodule Paxos do
     # return pid
     # participants should include all processes including the one specified by name
 
+    # Spawns a process and calls Paxos.init with the given arguments.
+    pid = spawn(Paxos, :init, [name, participants, self()])
+
+    # Register the process in the global registry under the specified name.
+    :global.re_register_name(name, pid)
+
+    # Return the pid
+    pid
+
   end
 
   def init() do
     # create state
     state = %{
       name: name,
+      participants: participants,
     }
 
     run(state)
   end
 
-  def run(state)
+  def run(state) do
     # run stuff
   end
 
@@ -41,14 +51,14 @@ defmodule Paxos do
         {:abort}
       else
         {:decide, state.decided}
+      end
     end
   end
-
 
   def get_decision(pid, inst, t) do
     # takes in pid, inst, t
     # returns v != nil if v has been decided for the inst
     # returns nil if v has not been decided for the inst
-
   end
+
 end
