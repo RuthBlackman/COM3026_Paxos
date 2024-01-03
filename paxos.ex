@@ -17,6 +17,21 @@ defmodule Paxos do
     # Return the pid
     pid
 
+    # pid = spawn(Paxos, :init, [name, processes])
+    # le = EventualLeaderDetector.start(name, participants, self())
+    # rb = EagerReliableBroadcast.start(name, participants, self())
+
+
+
+    # Spawns a process and calls Paxos.init with the given arguments.
+    pid = spawn(Paxos, :init, [name, participants, self()])
+
+    # Register the process in the global registry under the specified name.
+    :global.re_register_name(name, pid)
+
+    # Return the pid
+    pid
+
   end
 
   def init() do
