@@ -17,12 +17,10 @@ defmodule Paxos do
     # Return the pid
     pid
 
-
-
-
   end
 
   def init(name, participants, parent_name) do
+    # Start the leader detector and reliable broadcast processes
     le = EventualLeaderDetector.start(name, participants, self())
     rb = EagerReliableBroadcast.start(name, participants, self())
 
@@ -56,10 +54,16 @@ defmodule Paxos do
         Utils.beb_broadcast(state.participants, {:prepare, b})
 
       {:prepare, b} ->
-        if b> state.bal do
+        # Check if the ballot b is greater than the current ballot
+        if b > state.bal do
+          # if it is, update the state
           %{state | bal: b}
+
+          #  Send a prepared message to the leader with the received ballot b,
+          #  the ballot 'a_bal' from the received message, and the value 'a_val' from the received message
           send(state.leader, {:prepared, b, a_bal, a_val})
         else do
+          # if it is not, send a nack message to the leader with the received ballot b
           send(state.leader, {:nack, b})
         end
 
@@ -67,21 +71,35 @@ defmodule Paxos do
         # first need to check if this process is the leader
         if(state.leader == state.name) do
           if a_val == nil do
+            # If the value 'a_val' from the received message is nil, then
+            # set the state's value to the first proposal
             %{state | value: Enum.at(state.proposals, 0)}
           else do
+            # If a_val is not nil, set the state's value to a_val
             %{state | value: a_val}
           end
 
+          # Broadcast the message to all participants
           Utils.beb_broadcast(state.participants, {:accept, b, state.value})
         end
 
       {:accept, b, V} ->
-        if(b >state.bal)do
+        # Check if the ballot b is greater than the current ballot
+        if(b > state.bal) do
+          # Update the ballot in state to b
           %{state | bal: b}
+
+          # Update the state's value to V
           %{state | a_val: V}
+
+          # Update the accepted ballot in state to b
           %{state | a_bal: b}
+
+          # Send an accepted message to the leader with the received ballot b
           send(state.leader, {:accepted, b})
         else do
+          # If b is not greater than the current ballot,
+          # send a nack message to the leader with the received ballot b
           send(state.leader, {:nack, b})
         end
 
@@ -90,14 +108,18 @@ defmodule Paxos do
       {:accepted, b} ->
         # first need to check if this process is the leader
         if(state.leader == state.name) do
+          # Update the state to show that a decision has been made
           %{state | hasDecided: true}
+          # Broadcast the message to the parent process (i.e., the process that started Paxos)
           Utils.unicast(state.parent_name, {:decision, state.value})
         end
 
       {:nack, b} ->
+      # Broadcast the abort message to the parent process
         Utils.unicast(state.parent_name, {:abort})
 
       {:timeout} ->
+        # Broadcast the timeout message to the parent process
         Utils.unicast(state.parent_name, {:timeout})
 
     end
