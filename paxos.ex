@@ -28,16 +28,18 @@ defmodule Paxos do
     state = %{
       name: name,
       participants: participants,
-      bal: nil,
+      bal: nil, # current ballot
       a_bal: nil,
       a_val: nil,
       proposals: %MapSet{},
-      leader: nil,
-      value: nil,
-      inst: nil,
-      instances: %MapSet{},
-      hasDecided: false,
-      parent_name: parent_name,
+      leader: nil, # id of the leader process
+      value: nil, # decided value
+      inst: nil, # instance
+      instances: %MapSet{}, # map set of all instances
+      hasDecided: false, # has a decision been made?
+      parent_name: parent_name, # name of process that started the Paxos module
+      preparedQuorum: 0, # number of processes that have sent prepared
+      acceptedQuorum: 0, # number of processes that have sent accepted
     }
 
     run(state)
@@ -47,11 +49,21 @@ defmodule Paxos do
 
   def run(state) do
     state = received do
+      {:broadcast, pid, inst, value, t} ->
+        #if process is the leader, then broadcast
+        if(pid == state.leader) do
+          Utils.beb_broadcast(state.participants, {:prepare, 0}) # first ballot will be 0
+          %{state | proposal: MapSet.put(state.proposal, value)}
+        end
+
+
       {:leader_elect, p} ->
         # new leader was elected, so need to start the whole paxos algorithm again
         %{state | leader: p}
 
-        Utils.beb_broadcast(state.participants, {:prepare, b})
+        Utils.beb_broadcast(state.participants, {:prepare, state.bal+1}) # need to increment ballot when leader changes
+
+        state
 
       {:prepare, b} ->
         # Check if the ballot b is greater than the current ballot
@@ -61,27 +73,39 @@ defmodule Paxos do
 
           #  Send a prepared message to the leader with the received ballot b,
           #  the ballot 'a_bal' from the received message, and the value 'a_val' from the received message
-          send(state.leader, {:prepared, b, a_bal, a_val})
-        else do
+          send(state.leader, {:prepared, b, state.a_bal, state.a_val})
+
+
+        else
           # if it is not, send a nack message to the leader with the received ballot b
           send(state.leader, {:nack, b})
         end
 
-      {:prepared, b, a_bal, a_val} ->
-        # first need to check if this process is the leader
-        if(state.leader == state.name) do
-          if a_val == nil do
-            # If the value 'a_val' from the received message is nil, then
-            # set the state's value to the first proposal
-            %{state | value: Enum.at(state.proposals, 0)}
-          else do
-            # If a_val is not nil, set the state's value to a_val
-            %{state | value: a_val}
-          end
 
-          # Broadcast the message to all participants
-          Utils.beb_broadcast(state.participants, {:accept, b, state.value})
+        state
+
+      {:prepared, b, a_bal, a_val} ->
+        # increment quorum of processes who sent prepared
+        %{state | preparedQuorum: state.preparedQuorum+1}
+
+        # need to check if this process is the leader
+        if(state.leader == state.name) do
+          # now check if there is a quorum
+          if(state.preparedQuorum > (state.partipants/2 +1)) do
+            if a_val == nil do
+              # If the value 'a_val' from the received message is nil, then
+              # set the state's value to the first proposal
+              %{state | value: Enum.at(state.proposals, 0)}
+            else
+              # If a_val is not nil, set the state's value to a_val
+              %{state | value: a_val}
+            end
+
+            # Broadcast the message to all participants
+            Utils.beb_broadcast(state.participants, {:accept, b, state.value})
+          end
         end
+        state
 
       {:accept, b, V} ->
         # Check if the ballot b is greater than the current ballot
@@ -97,22 +121,33 @@ defmodule Paxos do
 
           # Send an accepted message to the leader with the received ballot b
           send(state.leader, {:accepted, b})
-        else do
+        else
           # If b is not greater than the current ballot,
           # send a nack message to the leader with the received ballot b
           send(state.leader, {:nack, b})
         end
 
-        # state
+        state
 
       {:accepted, b} ->
+        %{state | acceptedQuorum: state.acceptedQuorum+1}
+
         # first need to check if this process is the leader
         if(state.leader == state.name) do
-          # Update the state to show that a decision has been made
-          %{state | hasDecided: true}
-          # Broadcast the message to the parent process (i.e., the process that started Paxos)
-          Utils.unicast(state.parent_name, {:decision, state.value})
+          if(state.acceptedQuorum > (state.partipants/2 +1)) do # check if there is a quorum of accepted
+
+            # Update the state to show that a decision has been made
+            %{state | hasDecided: true}
+            # Broadcast the message to the parent process (i.e., the process that started Paxos)
+            Utils.unicast(state.parent_name, {:decision, state.value})
+
+            # clear the quorums as they are no longer needed
+            %{state | preparedQuorum: %MapSet{}}
+            %{state | acceptedQuorum: %MapSet{}}
+
+          end
         end
+        state
 
       {:nack, b} ->
       # Broadcast the abort message to the parent process
@@ -128,36 +163,18 @@ defmodule Paxos do
 
 
   def propose(pid, inst, value, t) do
-    # do paxos stuff
-
     # take in pid, inst, value, t
     # value is proposed by each pid
 
     Process.send_after(self(), {:timeout}, t)
-    Utils.beb_broadcast(state.participants, {:prepare, b})
 
-
-
-    %{state | proposal: MapSet.put(state.proposal, value)}
-
+    send(self(), {:broadcast, pid, inst, value, t})
 
 
     # {decide, v} - returned if v has been decided for the inst.
     # {abort} - returned if attempt was interrupted by another proposal with a higher ballot. Can choose to reissue the proposal with the higher ballot.
     # {timeout} - returned if the attempt was not able to be decided or aborted within the timeout speicified by t. I.e. pid has crashed
 
-
-
-
-    # if state.timedout do
-    #   {:timeout}
-    # else
-    #   if state.aborted do
-    #     {:abort}
-    #   else
-    #     {:decide, state.decided}
-    #   end
-    # end
 
 
 
@@ -173,7 +190,5 @@ defmodule Paxos do
     # returns v != nil if v has been decided for the inst
     # returns nil if v has not been decided for the inst
 
-
   end
-
 end
