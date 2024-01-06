@@ -7,7 +7,7 @@ defmodule Paxos do
     # participants should include all processes including the one specified by name
 
     # Spawns a process and calls Paxos.init with the given arguments.
-    pid = spawn(Paxos, :init, [name, participants, self()])
+    pid = spawn(Paxos, :init, [name, participants])
 
     # Register the process in the global registry under the specified name.
     :global.re_register_name(name, pid)
@@ -17,16 +17,15 @@ defmodule Paxos do
 
   end
 
-  def init(name, participants, parent_name) do
+  def init(name, participants) do
     # Start the leader detector and reliable broadcast processes
     le = EventualLeaderDetector.start(name, participants)
-    rb = EagerReliableBroadcast.start(name, participants,self())
 
     # create state
     state = %{
       name: name,
       participants: participants,
-      bal: nil, # current ballot
+      bal: 0, # current ballot
       a_bal: nil,
       a_val: nil,
       # proposals: %MapSet{},
@@ -35,7 +34,7 @@ defmodule Paxos do
       inst: nil, # instance
       #instances: %MapSet{}, # map set of all instances
       hasDecided: false, # has a decision been made?
-      parent_name: parent_name, # name of process that started the Paxos
+      parent_name: nil, # name of process that started the Paxos
       preparedQuorum: 0, # number of processes that have sent prepared
       acceptedQuorum: 0, # number of processes that have sent accepted
 
@@ -52,170 +51,226 @@ defmodule Paxos do
 
   def run(state) do
     state = receive do
-      {:return_decision, pid, inst, t} ->
-        # return the decision for a given instance
-        Map.get(state.allDecisions, inst)
+      {:check_instance, pid, inst, value} ->
 
+        state = %{state | parent_name: pid, inst: inst}
 
-      {:broadcast_proposal, value} ->
-        # if a process hears another process's proposal, it will store it
-        %{state | heardProposal: value}
-
-
-       {:check_instance, pid, inst, value, t} ->
         # check if a decision was already made for this instance
         potentialDecision = Map.get(state.allDecisions, inst)
 
+        IO.puts("Checking if a decision was already made for the instance #{inst}")
+        IO.puts("Decision for this instance is #{potentialDecision}")
+
         # if a decision has not been made yet, then continue with proposal
         if potentialDecision == nil do
-          send(self(), {:broadcast, pid, inst, value, t})
+          send(self(), {:broadcast, pid, inst, value})
         else # if a decision has been made already, then return the decision
           potentialDecision
         end
 
+        state
 
-      {:broadcast, pid, inst, value, t} ->
-        # a process will store its own proposal
-        %{state | ownProposal: value}
 
-        # store the instance number
-        %{state | inst: inst}
+
+      {:return_decision, pid, inst} ->
+        # return the decision for a given instance
+
+
+        inst_decision = Map.get(state.allDecisions, inst)
+        #IO.puts("Decision for instance: #{inspect(inst_decision)}")
+
+        send(pid, {:return_decision, inst_decision })
+        state
+
+
+      {:broadcast_proposal, value, inst} ->
+        # if a process hears another process's proposal, it will store it
+        IO.puts("#{state.name} Heard the proposal, #{inspect(value)} and the inst #{inst}")
+        %{state | heardProposal: value, inst: inst}
+
+
+      {:broadcast, pid, inst, value} ->
+        IO.puts("broadcast #{state.name}")
+        # a process will store its own proposal and the instance number
+        state = %{state | ownProposal: value, inst: inst}
+
+        IO.puts("process #{state.name} is storing its own proposal #{inspect(value)} and inst number #{inst}")
 
         # if a process has a proposal, it will broadcast its proposal to everyone
-        Utils.beb_broadcast(state.partipants, {:broadcast_proposal, value})
+        Utils.beb_broadcast(state.participants, {:broadcast_proposal, value, inst})
 
         #if process is the leader, it will then broadcast prepare
         if(pid == state.leader) do
+          IO.puts("#{pid} is the leader, so it will broadcast prepare, with b as 0")
           Utils.beb_broadcast(state.participants, {:prepare, 0,pid}) # first ballot will be 0
-          %{state | proposal: MapSet.put(state.proposal, value)}
+          %{state | proposal: MapSet.put(state.proposal, value), bal: 0}
+        else
+          state
+        end
+
+      {:leader_elect, p} ->
+
+
+        IO.puts("#{p} is elected as the leader, so send prepare to all processes with bal #{state.bal+1}")
+
+        if(state.name == p) do
+
+          # leader already has proposals
+          if(state.ownProposal != nil || state.heardProposal != nil) do
+            Utils.beb_broadcast(state.participants, {:prepare, state.bal+1,p })
+          end
+
         end
 
 
-      {:leader_elect, p} ->
         # new leader was elected, so need to start the whole paxos algorithm again
-        %{state | leader: p}
-
-        Utils.beb_broadcast(state.participants, {:prepare, state.bal+1}) # need to increment ballot when leader changes
-
-        state
+        %{state | leader: p, bal: state.bal}
 
       {:prepare, b, leader} ->
+        IO.puts("prepare #{state.name}")
         # Check if the ballot b is greater than the current ballot
         if b > state.bal do
-          # if it is, update the state
-          %{state | bal: b}
 
-          # update leader
-          %{state | leader: leader}
+
+          IO.puts("b is greater than state.val, so update bal #{b}")
 
           #  Send a prepared message to the leader with the received ballot b,
           #  the ballot 'a_bal' from the received message, and the value 'a_val' from the received message
-          send(leader, {:prepared, b, state.a_bal, state.a_val})
+          Utils.unicast(leader, {:prepared, b, state.a_bal, state.a_val})
+
+                    # if it is, update the bal and the leader in state
+          %{state | bal: b, leader: leader}
 
 
         else
           # if it is not, send a nack message to the leader with the received ballot b
+          IO.puts("nack was sent #{b}")
           send(leader, {:nack, b})
+          state
         end
-
-
-        state
 
       {:prepared, b, a_bal, a_val} ->
         # increment quorum of processes who sent prepared
-        %{state | preparedQuorum: state.preparedQuorum+1}
+        state = %{state | preparedQuorum: state.preparedQuorum+1}
 
         # need to check if this process is the leader
         if(state.leader == state.name) do
           # now check if there is a quorum
-          if(state.preparedQuorum > (state.partipants/2 +1)) do
-            if a_val == nil do
+          if(state.preparedQuorum > (length(state.participants)/2 +1)) do
+            IO.puts("reached quorum for prepared")
+            state= if a_val == nil do
               # If the value 'a_val' from the received message is nil, then V will be the leader's proposal (or the heard proposal if it doesnt have one)
+              IO.puts("#{state.name} own proposal: #{inspect(state.ownProposal)}")
+              IO.puts("#{state.name} heard proposal: #{inspect(state.heardProposal)}")
 
               if state.ownProposal != nil do
-                V = state.ownProposal
-                %{state | value: V}
+                IO.puts("leader #{inspect(state.leader)} is using own proposal, which is #{inspect(state.ownProposal)}")
+                v = state.ownProposal
+                %{state | value: v}
+
               else
-                V = state.heardProposal
-                %{state | value: V}
+                v = state.heardProposal
+                IO.puts("leader #{inspect(state.leader)} is using heard proposal, which is #{inspect(state.heardProposal)}")
+                %{state | value: v}
               end
             else
+              IO.puts("leader #{state.leader} is using a_val, which is #{a_val}")
               # If a_val is not nil, set the state's value to a_val
-              V = a_val
-              %{state | value: V}
+              v = a_val
+              %{state | value: v}
+
             end
 
-
-
             # Broadcast the message to all participants
+            IO.puts("broadcast accept to participants, #{inspect(state.value)}")
             Utils.beb_broadcast(state.participants, {:accept, b, state.value})
+            state
           end
         end
         state
 
-      {:accept, b, V} ->
+      {:accept, b, v} ->
         # Check if the ballot b is greater than the current ballot
-        if(b > state.bal) do
-          # Update the ballot in state to b
-          %{state | bal: b}
+        IO.puts("in accept, b is #{inspect(b)} and state.bal is #{inspect(state.bal)}")
+        if(b >= state.bal) do
 
-          # Update the state's value to V
-          %{state | a_val: V}
 
-          # Update the accepted ballot in state to b
-          %{state | a_bal: b}
+          IO.puts("in accept, b>state.bal, so update bal, a_val, and a_bal")
 
           # Send an accepted message to the leader with the received ballot b
-          send(state.leader, {:accepted, b})
+          Utils.unicast(state.leader, {:accepted, b})
+
+          IO.puts("a_val is #{inspect(v)}, a_bal is #{inspect(b)}")
+
+                    # Update the ballot, a_val, and a_bal
+          %{state | bal: b, a_val: v, a_bal: b}
         else
           # If b is not greater than the current ballot,
           # send a nack message to the leader with the received ballot b
-          send(state.leader, {:nack, b})
+
+          IO.puts("in accept, b < state.bal, so send nack to the leader #{state.leader}")
+          Utils.unicast(state.leader, {:nack, b})
+          state
         end
 
-        state
+        #state
 
       {:accepted, b} ->
-        %{state | acceptedQuorum: state.acceptedQuorum+1}
+        state = %{state | acceptedQuorum: state.acceptedQuorum+1}
 
         # first need to check if this process is the leader
         if(state.leader == state.name) do
-          if(state.acceptedQuorum > (state.partipants/2 +1)) do # check if there is a quorum of accepted
+          if(state.acceptedQuorum > (length(state.participants)/2 +1)) do # check if there is a quorum of accepted
 
-            # Update the state to show that a decision has been made
-            %{state | hasDecided: true}
+          IO.puts("in accepted, there is a quorum, so leader #{state.leader} sends decision to parent and participants")
+          IO.puts("in accepted, the value is #{inspect(state.a_val)} and the instance is #{inspect(state.inst)}")
+
             # Broadcast the decision to the parent process (i.e., the process that started Paxos)
-            Utils.unicast(state.parent_name, {:decision, state.value})
+            # send(state.parent_name, {:decision, state.a_val})
+
+            # check if parent_name exists, if it does, then send decision. if it doesnt exist, then there was no proposal so ignore it
+            if state.parent_name != nil do
+              send(state.parent_name, {:decision, state.a_val})
+            end
 
             # broadcast the decision all the participants
-            Utils.beb_broadcast(state.partipants, {:received_decision, state.value})
+            Utils.beb_broadcast(state.participants, {:received_decision, state.a_val, state.inst})
 
-
-            # clear the quorums as they are no longer needed
-            %{state | preparedQuorum: %MapSet{}}
-            %{state | acceptedQuorum: %MapSet{}}
+            # clear the quorums as they are no longer needed and update hasDecided
+            %{state | hasDecided: true, preparedQuorum: %MapSet{}, acceptedQuorum: %MapSet{}}
 
           end
+        else
+          IO.puts("no quorum reached for accepted yet")
+          state
         end
         state
 
       {:nack, b} ->
       # Broadcast the abort message to the parent process
         Utils.unicast(state.parent_name, {:abort})
+        IO.puts("broadcasting abort to parent")
+        state
 
       {:timeout} ->
         # Broadcast the timeout message to the parent process
         Utils.unicast(state.parent_name, {:timeout})
+        IO.puts("broadcasting timeout to parent")
+        state
 
-      {:received_decision, v} ->
-        # the process will store the decision
-        %{state | decision: v}
-
+      {:received_decision, v, inst} ->
+        IO.puts("storing the decision and instance in map")
         # store decision and instance in a map
-        %{state | allDecisions: Map.put(state.allDecisions, state.inst, v)}
+        ma = Map.put(state.allDecisions, inst, v)
+        IO.puts("map : #{inspect(ma)}")
+
+
+        %{state | decision: v, allDecisions: Map.put(state.allDecisions, inst, v)}
+
 
 
     end
+    run(state)
   end
 
 
@@ -227,11 +282,18 @@ defmodule Paxos do
     Process.send_after(self(), {:timeout}, t) # start timeout
 
     # need to check whether this instance has a decision
-    send(self(), {:check_instance, pid, inst, value, t})
+    send(pid, {:check_instance, self(), inst, value})
+
+
 
     result = receive do
       {:decision, v} ->
-        IO.puts("Decision #{v}")
+        IO.puts("Decision #{inspect(v)}")
+        {:decision,v}
+      {:abort} ->
+        {:abort}
+      {:timeout} ->
+        {:timeout}
     end
 
 
@@ -250,8 +312,17 @@ defmodule Paxos do
     # returns v != nil if v has been decided for the inst
     # returns nil if v has not been decided for the inst
 
-    send(self(), {:return_decision, pid, inst, t})
+    Process.send_after(self(), {:timeout}, t) # start timeout
 
+
+    send(pid, {:return_decision, self(), inst})
+    result = receive do
+      {:return_decision, v } ->
+        #IO.puts("get_decision got a decision #{inspect(v)}")
+          v
+      {:timeout} ->
+        nil
+    end
 
   end
 end

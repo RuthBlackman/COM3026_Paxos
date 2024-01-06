@@ -8,7 +8,7 @@ defmodule EventualLeaderDetector do
     participants = Enum.map(participants, fn x -> Utils.add_to_name(x, "leader_election") end);
 
     # spawn leader election
-    pid = spawn(EventualLeaderDetector, :init, [new_name, participants, name]);
+    pid = spawn(EventualLeaderDetector, :init, [new_name, participants, name]); # atom name = pid
 
     # register name
     Utils.register_name(new_name, pid);
