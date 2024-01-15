@@ -30,8 +30,11 @@ defmodule Paxos do
       participants: participants,
       #bal: 0, # current ballot
       bal: {0, name}, #ballot number, process id
-      a_bal: nil,
-      a_val: nil,
+      a_bal: nil, # {bal_num, proc_id}
+      a_val: nil, # could be any type
+   #   a_val_list: [], # [{a_bal, a_val}]
+      a_bal_max: nil, # {bal_num, proc_id}
+      a_val_max: nil,
       # proposals: %MapSet{},
       leader: nil, # id of the leader process
       value: nil, # decided value
@@ -208,8 +211,8 @@ defmodule Paxos do
             #  the ballot 'a_bal' from the received message, and the value 'a_val' from the received message
             Utils.unicast(leader, {:prepared, b, state.a_bal, state.a_val, state.inst})
 
-                      # if it is, update the bal and the leader in state
-            %{state | bal: b, leader: leader}
+            # set a_val_max and a_bal_max to be nil and update the bal and the leader in state
+            %{state | bal: b, leader: leader, a_bal_max: nil, a_val_max: nil}
 
 
           else
@@ -231,13 +234,30 @@ defmodule Paxos do
           # increment quorum of processes who sent prepared
           state = %{state | preparedQuorum: state.preparedQuorum+1}
 
+          # update a_bal_max and a_val_max
+          state= if a_bal == nil and a_val == nil do
+            state
+          else
+            if state.a_bal_max == nil do
+                %{state | a_bal_max: a_bal, a_val_max: a_val}
+            else
+              if a_bal > state.a_bal_max do
+                %{state | a_bal_max: a_bal, a_val_max: a_val}
+              else
+                state
+              end
+
+            end
+          end
+
           # need to check if this process is the leader
           if(state.leader == state.name) do
             # now check if there is a quorum
             IO.puts("#{inspect(state.leader)} is checking if there is a quorum for prepared: #{inspect(state.preparedQuorum)}")
             if(state.preparedQuorum >= (floor(length(state.participants)/2) +1)) do
               IO.puts("reached quorum for prepared")
-              state= if a_val == nil do
+
+              state= if state.a_val_max == nil do
                 # If the value 'a_val' from the received message is nil, then V will be the leader's proposal (or the heard proposal if it doesnt have one)
                 IO.puts("#{state.name} own proposal: #{inspect(state.ownProposal)}")
                 IO.puts("#{state.name} heard proposal: #{inspect(state.heardProposal)}")
@@ -253,9 +273,9 @@ defmodule Paxos do
                   %{state | value: v}
                 end
               else
-                IO.puts("leader #{state.leader} is using a_val, which is #{inspect(a_val)}")
+                IO.puts("leader #{state.leader} is using a_val, which is #{inspect(state.a_val_max)}")
                 # If a_val is not nil, set the state's value to a_val
-                v = a_val
+                v = state.a_val_max
                 %{state | value: v}
 
               end
