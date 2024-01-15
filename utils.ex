@@ -1,3 +1,7 @@
+# ----------------------------------------
+# Utils
+# ----------------------------------------
+
 defmodule Utils do
   def unicast(p, m) do
     case :global.whereis_name(p) do
@@ -27,4 +31,43 @@ defmodule Utils do
         :error
     end
   end
+
+  # ----------------------------------------------
+  # functions for comparing ballot and process id
+  # ----------------------------------------------
+  def compare_ballot(left, operator, right) do
+    operator.(ballot_compare(left, right),0)
+  end
+
+  defp ballot_compare(a, b) do
+    diff = elem(a, 0) - elem(b, 0)
+    if diff == 0, do: lexicographical_compare(elem(a, 1), elem(b, 1)), else: diff
+  end
+
+  def lexicographical_compare(a, b) do
+    if a == b do
+      0
+    end
+
+    if a>b do
+      1
+    end
+
+    if a<b do
+      -1
+    end
+
+
+  end
+
+  def increment_ballot_number(ballot_tuple, leader) do
+    {elem(ballot_tuple,0)+1, leader}
+
+  end
+
+  # # Converts a ballot reference to the raw ballot index.
+  # defp ballot_ref_to_index(ballot) do
+  #   elem(ballot, 1)
+  # end
+
 end

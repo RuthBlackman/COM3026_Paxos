@@ -1,3 +1,6 @@
+# ----------------------------
+# Paxos
+# ----------------------------
 defmodule Paxos do
 
   def start(name, participants) do
@@ -25,8 +28,8 @@ defmodule Paxos do
     state = %{
       name: name,
       participants: participants,
-      bal: 0, # current ballot
-      #bal: {bal num, proc}
+      #bal: 0, # current ballot
+      bal: {0, name}, #ballot number, process id
       a_bal: nil,
       a_val: nil,
       # proposals: %MapSet{},
@@ -161,7 +164,8 @@ defmodule Paxos do
         IO.puts("#{inspect(state.name)} broadcast: the leader is #{inspect(state.leader)}")
         if(state.name == state.leader) do #TODO Fix it - may call propose twice oops fix
           IO.puts("#{inspect(pid)} is the leader, so it will broadcast prepare, with b as 0")
-          Utils.beb_broadcast(state.participants, {:prepare, state.bal + 1, state.name, state.inst}) # first ballot will be 0
+      #    Utils.beb_broadcast(state.participants, {:prepare, state.bal + 1, state.name, state.inst}) # first ballot will be 0
+          Utils.beb_broadcast(state.participants, {:prepare, Utils.increment_ballot_number(state.bal, state.name),state.name, state.inst })
           state
          # %{state | proposal: MapSet.put(state.proposal, value), bal: 0}
         else
@@ -171,13 +175,14 @@ defmodule Paxos do
       {:leader_elect, p} ->
 
 
-        IO.puts("#{state.name} - #{p} is elected as the leader, so send prepare to all processes with bal #{state.bal+1}")
+        IO.puts("#{state.name} - #{p} is elected as the leader, so send prepare to all processes with bal ...")
 
         if(state.name == p) do
           # leader already has proposals
           if(state.ownProposal != nil || state.heardProposal != nil) do
             IO.puts("#{inspect(p)}: new leader, already has proposals, instance: #{inspect(state.inst)} ")
-            Utils.beb_broadcast(state.participants, {:prepare, state.bal+1,p, state.inst })
+            #Utils.beb_broadcast(state.participants, {:prepare, state.bal+1,p, state.inst })
+            Utils.beb_broadcast(state.participants, {:prepare, Utils.increment_ballot_number(state.bal, p),p, state.inst })
             state
           end
 
@@ -192,10 +197,12 @@ defmodule Paxos do
           IO.puts("prepare #{state.name} for inst #{inspect(inst)}")
 
           # Check if the ballot b is greater than the current ballot
-          if b > state.bal do
+          #if b > state.bal do
+          IO.puts("bal is #{inspect(b)}")
+          IO.puts("state.bal is #{inspect(state.bal)}")
+          if Utils.compare_ballot(b, &>/2, state.bal) do
 
-
-            IO.puts("#{inspect(state.name)}: b is greater than state.bal, so update bal #{b} for inst #{inspect(inst)} and send #{inspect(leader)} prepared")
+            IO.puts("#{inspect(state.name)}: b is greater than state.bal, so update bal for inst #{inspect(inst)} and send #{inspect(leader)} prepared")
 
             #  Send a prepared message to the leader with the received ballot b,
             #  the ballot 'a_bal' from the received message, and the value 'a_val' from the received message
@@ -271,7 +278,8 @@ defmodule Paxos do
         if inst == state.inst do
           # Check if the ballot b is greater than the current ballot
           IO.puts("in accept, b is #{inspect(b)} and state.bal is #{inspect(state.bal)}")
-          if(b >= state.bal) do
+         # if(b >= state.bal) do
+          if Utils.compare_ballot(b, &>=/2, state.bal) do
             IO.puts("in accept, b>state.bal, so update bal, a_val, and a_bal")
 
             # Send an accepted message to the leader with the received ballot b
@@ -357,8 +365,8 @@ defmodule Paxos do
 
          # clear the quorums as they are no longer needed and update hasDecided
          state = %{state |
-            bal: 0, # current ballot
-            #bal: {bal num, proc}
+           # bal: 0, # current ballot
+            bal: {0, state.name},
             a_bal: nil,
             a_val: nil,
             # proposals: %MapSet{},
@@ -418,6 +426,9 @@ defmodule Paxos do
 
 
 
+  # ----------------------------------
+  # Application functions
+  # ----------------------------------
   def propose(pid, inst, value, t) do
     # take in pid, inst, value, t
     # value is proposed by each pid
