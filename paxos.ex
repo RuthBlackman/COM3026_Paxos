@@ -228,7 +228,7 @@ defmodule Paxos do
           if(state.leader == state.name) do
             # now check if there is a quorum
             IO.puts("#{inspect(state.leader)} is checking if there is a quorum for prepared: #{inspect(state.preparedQuorum)}")
-            if(state.preparedQuorum > (floor(length(state.participants)/2) +1)) do
+            if(state.preparedQuorum >= (floor(length(state.participants)/2) +1)) do
               IO.puts("reached quorum for prepared")
               state= if a_val == nil do
                 # If the value 'a_val' from the received message is nil, then V will be the leader's proposal (or the heard proposal if it doesnt have one)
@@ -303,7 +303,7 @@ defmodule Paxos do
 
           # first need to check if this process is the leader
           if(state.leader == state.name) do
-            if(state.acceptedQuorum > (floor(length(state.participants)/2) +1)) do # check if there is a quorum of accepted
+            if(state.acceptedQuorum >= (floor(length(state.participants)/2) +1)) do # check if there is a quorum of accepted
 
             IO.puts("in accepted, there is a quorum, so leader #{state.leader} sends decision to parent and participants")
             IO.puts("in accepted, the value is #{inspect(state.a_val)} and the instance is #{inspect(state.inst)}")
