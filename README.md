@@ -31,9 +31,11 @@ Each user will have their own instance of Paxos.
 * The service will be run on a trusted machine.
 
 # Usage Instructions #
-### How to set up ###
+1. Start iex using ```iex``` in the terminal.
+2. Compile the code using ```c "paxos.ex"``` and ```c "server.ex"```
+3. ```procs = Enum.to_list(1..3) |> Enum.map(fn m -> :"p#{m}" end)```
+4. ```pids = Enum.map(procs, fn p -> InventoryServer.start(p, procs) end)```
+5. ```a = Enum.at(pids, 0)```
+6. To add an item to the inventory, use ```InventoryServer.add_to_inventory(a, 10)```
 
-
-### How to run ###
-
-
+7. To kill the processes use ```pids |> Enum.map(fn p -> Process.exit(p, :kill) end)```
