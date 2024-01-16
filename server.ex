@@ -21,7 +21,9 @@ defmodule ShopServer do
       pending: {0, nil},
       stock: 0,
     }
-
+    # TODO: had in example, not sure if needed
+    # Ensures shared destiny (if one of the processes dies, the other one does too)
+    # Process.link(state.pax_pid)
     run(state)
   end
 
@@ -45,6 +47,7 @@ defmodule ShopServer do
     if msg, do: msg, else: wait_for_reply(r, attempt - 1)
   end
 
+  # TODO: might have to change this a bit
   # Check if item is in stock
   def check_stock(r) do
     send(r, {:get_stock, self()})
@@ -54,6 +57,7 @@ defmodule ShopServer do
     end
   end
 
+  # TODO: might have to change this a bit
   # Add to cart
   def add_to_cart(r, item) do
     if item < 0, do: raise("add_to_cart failed: item must be positive")
@@ -66,6 +70,7 @@ defmodule ShopServer do
     end
   end
 
+  # TODO: might have to change this a bit
   # Remove from cart
   def remove_from_cart(r, item) do
     if item < 0, do: raise("remove_from_cart failed: item must be positive")
@@ -78,6 +83,7 @@ defmodule ShopServer do
     end
   end
 
+  # TODO: might have to change some of the wording i.e., stuff about instances
   def run(state) do
     # Run stuff
     state = receive do
@@ -94,36 +100,41 @@ defmodule ShopServer do
         send(client, {:stock, state.stock})
         state
 
+        #TODO: not sure if needed (commented out in example)
+#        {:abort, inst} ->
+#          {pinst, client} = state.pending
+#          if inst == pinst do
+#            send(client, {:abort})
+#          else
+#            state
+#          end
+
       {:poll_for_decisions} ->
         poll_for_decisions(state)
-        _ -> state
 
+        _ -> state
     end
+
     run(state)
   end
 
   # Poll for decisions
   def poll_for_decisions(state) do
-    case Paxos.get_decision(state.pax_pid, i = state.last_instance) do
-       {add_to_cart, item} ->
+    case Paxos.get_decision(state.pax_pid, i = state.last_instance + 1, 1000) do
+       {:add_to_cart, item, amount} ->
        state = case state.pending do
-         {i, client} ->
-           send(client, {:add_to_cart, item})
-           %{state | pending: {i+1, nil}}
-         _ -> state
+         #TODO: add stuff here
        end
        poll_for_decisions(%{state | last_instance: i})
 
-       {remove_from_cart, item} ->
+       {:remove_from_cart, item, amount} ->
         state = case state.pending do
-          {i, client} ->
-            send(client, {:remove_from_cart, item})
-            %{state | pending: {i+1, nil}}
-          _ -> state
+          #TODO: add stuff here
         end
 
         state = %{state | stock: (if (sto = state.stock - item) < 0, do: 0, else: sto)}
         poll_for_decisions(%{state | last_instance: i+1})
+        nil -> state
     end
   end
 end
