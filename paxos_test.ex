@@ -2,7 +2,7 @@ defmodule PaxosTest do
 
     # The functions implement
     # the module specific testing logic
-    defp init(name, participants, all \\ false) do
+    def init(name, participants, all \\ false) do
         cpid = TestHarness.wait_to_register(:coord, :global.whereis_name(:coord))
         try do
             pid = Paxos.start(name, participants)
@@ -17,14 +17,14 @@ defmodule PaxosTest do
         end
     end
 
-    defp kill_paxos(pid, name) do
+    def kill_paxos(pid, name) do
         Process.exit(pid, :kill)
         :global.unregister_name(name)
         pid
     end
 
-    defp wait_for_decision(_, _, timeout) when timeout <= 0, do: {:none, :none}
-    defp wait_for_decision(pid, inst, timeout) do
+    def wait_for_decision(_, _, timeout) when timeout <= 0, do: {:none, :none}
+    def wait_for_decision(pid, inst, timeout) do
         Process.sleep(100)
         v = Paxos.get_decision(pid, inst, 1)
         case v do
@@ -33,7 +33,7 @@ defmodule PaxosTest do
         end
     end
 
-    defp propose_until_commit(pid, inst, val) do
+    def propose_until_commit(pid, inst, val) do
         status = Paxos.propose(pid, inst, val, 10000)
         case status do
             {:decision, val} -> val
