@@ -112,10 +112,10 @@ defmodule ShopServer do
            {^i, client} ->
              send(elem(state.pending, 1), {:add_to_cart_ok})
              IO.puts("state.inventory = #{inspect(Map.put(state.inventory, item, amount))}")
-             %{state | pending: {0, nil}, inventory: Map.put(state.inventory, item, amount)}
+             %{state | pending: {amount, nil}, inventory: Map.put(state.inventory, item, amount)}
            {^i, _} ->
              send(elem(state.pending, 1), {:add_to_cart_failed})
-             %{state | pending: {0, nil}, stock: state.stock + amount}
+             %{state | pending: {amount, nil}, stock: state.stock + amount}
            _ ->
              %{state | stock: state.stock + amount}
          end
@@ -126,14 +126,14 @@ defmodule ShopServer do
            {^i, client} ->
              if state.stock - amount < 0 do
                send(elem(state.pending, 1), {:out_of_stock})
-               %{state | pending: {0, nil}}
+               %{state | pending: {amount, nil}}
              else
                send(elem(state.pending, 1), {:remove_from_cart_ok})
-               %{state | pending: {0, nil}}
+               %{state | pending: {amount, nil}}
              end
            {^i, _} ->
              send(elem(state.pending, 1), {:remove_from_cart_failed})
-             %{state | pending: {0, nil}}
+             %{state | pending: {amount, nil}}
            _ -> state
          end
         state = %{state | stock: (if (sto = state.stock - item) < 0, do: 0, else: sto)}

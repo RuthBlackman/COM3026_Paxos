@@ -3,6 +3,12 @@
 # ----------------------------
 defmodule Paxos do
 
+  def log(msg) do
+    if false do
+      IO.puts(msg)
+    end
+  end
+
   def start(name, participants) do
     # start Paxos process
     # register in global registry under name
@@ -62,15 +68,15 @@ defmodule Paxos do
   def run(state) do
     state = receive do
       {:check_instance, pid, inst, value, action} ->
-        IO.puts("#{inspect(state.name)} proposes inst #{inspect(inst)} with value #{inspect(value)}")
+        log("#{inspect(state.name)} proposes inst #{inspect(inst)} with value #{inspect(value)}")
 
         state = %{state | parent_name: pid, parent_pid: pid,}
 
         # check if a decision was already made for this instance
         potentialDecision = Map.get(state.allDecisions, inst)
 
-        # IO.puts("Checking if a decision was already made for the instance #{inst}")
-        IO.puts("Decision for inst #{inspect(inst)} is #{inspect(potentialDecision)}")
+        # log("Checking if a decision was already made for the instance #{inst}")
+        log("Decision for inst #{inspect(inst)} is #{inspect(potentialDecision)}")
 
         # if a decision has not been made yet, then continue with proposal
         # if potentialDecision == nil do
@@ -86,7 +92,7 @@ defmodule Paxos do
 
         else
           if action == :increase_ballot_number do
-            IO.puts("#{state.name} increasing ballot number")
+            log("#{state.name} increasing ballot number")
 
             send(pid, {:timeout});
 
@@ -94,11 +100,11 @@ defmodule Paxos do
           else
 
 
-            IO.puts("checking if instance #{inspect(inst)} is in map of instances")
+            log("checking if instance #{inspect(inst)} is in map of instances")
             # decision has not been made yet, so check if instance is in map of instances -> proposals
             Utils.beb_broadcast(state.participants, {:update_instances_map, inst, pid, [value]})
             # state= if(Map.has_key?(state.instances, inst)) do
-            #   IO.puts("#{inspect(state.name)} has inst #{inspect(inst)} in map")
+            #   log("#{inspect(state.name)} has inst #{inspect(inst)} in map")
             #   # if in map, need to add proposal to list of proposals in this map
             #    #%{state | instances: Map.replace(state.instances, inst, Map[inst]++[value])}
 
@@ -106,7 +112,7 @@ defmodule Paxos do
             #   # %{state | instances: Map.put(state.instance, inst, Tuple.append(Map[inst], value))}
             #   state
             # else
-            #   IO.puts("#{inspect(state.name)} does not have inst #{inspect(inst)} in map")
+            #   log("#{inspect(state.name)} does not have inst #{inspect(inst)} in map")
             #   Utils.beb_broadcast(state.participants, {:update_instances_map, inst, pid, [value]})
             #   # not in map, so add inst, pid and propsal to map
             #   # %{state | instances: Map.put(state.instances, inst, {pid, [value]})}
@@ -117,7 +123,7 @@ defmodule Paxos do
             # if not, then inst already running so wait
 
             state = if(state.inst == nil) do
-              IO.puts("#{inspect(state.name)} has state.inst as nil, so send broadcast for inst #{inspect(inst)} as not running an inst yet")
+              log("#{inspect(state.name)} has state.inst as nil, so send broadcast for inst #{inspect(inst)} as not running an inst yet")
 
               send(self(), {:broadcast, pid, inst, value})
               %{state | inst: inst}
@@ -141,11 +147,11 @@ defmodule Paxos do
 
       {:update_instances_map, inst, pid, [proposals]} ->
         if(Map.has_key?(state.instances, inst)) do
-          IO.puts("#{inspect(state.name)} already has inst #{inst} on instances map: #{inspect(state.instances)}")
+          log("#{inspect(state.name)} already has inst #{inst} on instances map: #{inspect(state.instances)}")
           state
         else
           state = %{state | instances: Map.put(state.instances, inst, {pid, [proposals]})}
-          IO.puts("#{inspect(state.name)} instances map is now #{inspect(state.instances)}")
+          log("#{inspect(state.name)} instances map is now #{inspect(state.instances)}")
           state
         end
 
@@ -155,7 +161,7 @@ defmodule Paxos do
 
 
         inst_decision = Map.get(state.allDecisions, inst)
-        #IO.puts("Decision for instance: #{inspect(inst_decision)}")
+        #log("Decision for instance: #{inspect(inst_decision)}")
 
         send(pid, {:return_decision, inst_decision })
         state
@@ -163,7 +169,7 @@ defmodule Paxos do
 
       {:broadcast_proposal, value, inst} ->
         # if a process hears another process's proposal, it will store it
-        IO.puts("#{state.name} Heard the proposal, #{inspect(value)} and the inst #{inst}")
+        log("#{state.name} Heard the proposal, #{inspect(value)} and the inst #{inst}")
         state = %{state | heardProposal: value, inst: inst}
 
         # if leader, send prepare
@@ -176,19 +182,19 @@ defmodule Paxos do
 
 
       {:broadcast, pid, inst, value} ->
-        IO.puts("#{state.name} is starting broadcast state...")
+        log("#{state.name} is starting broadcast state...")
         # a process will store its own proposal and the instance number
         state = %{state | ownProposal: value, inst: inst}
 
-        IO.puts("#{state.name} is storing its own proposal #{inspect(value)} and inst number #{inst}")
+        log("#{state.name} is storing its own proposal #{inspect(value)} and inst number #{inst}")
 
         # if a process has a proposal, it will broadcast its proposal to everyone
         Utils.beb_broadcast(state.participants, {:broadcast_proposal, value, inst})
 
         #if process is the leader, it will then broadcast prepare
-        IO.puts("#{inspect(state.name)} broadcast: the leader is #{inspect(state.leader)}")
+        log("#{inspect(state.name)} broadcast: the leader is #{inspect(state.leader)}")
         if(state.name == state.leader) do #TODO Fix it - may call propose twice oops fix
-          IO.puts("#{inspect(pid)} is the leader, so it will broadcast prepare")
+          log("#{inspect(pid)} is the leader, so it will broadcast prepare")
       #    Utils.beb_broadcast(state.participants, {:prepare, state.bal + 1, state.name, state.inst}) # first ballot will be 0
           Utils.beb_broadcast(state.participants, {:prepare, Utils.increment_ballot_number(state.bal, state.name),state.name, state.inst })
           state
@@ -198,12 +204,12 @@ defmodule Paxos do
         end
 
       {:leader_elect, p} ->
-        IO.puts("#{state.name} - #{p} is elected as the leader, so send prepare to all processes with bal ...")
+        log("#{state.name} - #{p} is elected as the leader, so send prepare to all processes with bal ...")
 
         if(state.name == p) do
           # leader already has proposals
           if(state.ownProposal != nil || state.heardProposal != nil) do
-            IO.puts("#{inspect(p)}: new leader, already has proposals, instance: #{inspect(state.inst)} ")
+            log("#{inspect(p)}: new leader, already has proposals, instance: #{inspect(state.inst)} ")
             #Utils.beb_broadcast(state.participants, {:prepare, state.bal+1,p, state.inst })
             Utils.beb_broadcast(state.participants, {:prepare, Utils.increment_ballot_number(state.bal, p),p, state.inst })
             state
@@ -217,16 +223,16 @@ defmodule Paxos do
 
       {:prepare, b, leader, inst} ->
         if state.inst == inst do
-          IO.puts("#{inspect(state.name)} prepare: own ballot #{inspect(state.bal)}, incoming ballot #{inspect(b)}, inst #{inspect(inst)}")
+          log("#{inspect(state.name)} prepare: own ballot #{inspect(state.bal)}, incoming ballot #{inspect(b)}, inst #{inspect(inst)}")
 
           # Check if the ballot b is greater than the current ballot
           #if b > state.bal do
-          # IO.puts("bal is #{inspect(b)}")
-          # IO.puts("state.bal is #{inspect(state.bal)}")
-          # IO.puts("#{inspect(state.name)}: compare ballot comparison in prepare: #{inspect(Utils.compare_ballot(b, &>/2, state.bal))}")
+          # log("bal is #{inspect(b)}")
+          # log("state.bal is #{inspect(state.bal)}")
+          # log("#{inspect(state.name)}: compare ballot comparison in prepare: #{inspect(Utils.compare_ballot(b, &>/2, state.bal))}")
           if Utils.compare_ballot(b, &>/2, state.bal) do
 
-            IO.puts("#{inspect(state.name)}: b #{inspect(b)} is greater than state.bal #{inspect(state.bal)}, so update bal for inst #{inspect(inst)} and send #{inspect(leader)} prepared")
+            log("#{inspect(state.name)}: b #{inspect(b)} is greater than state.bal #{inspect(state.bal)}, so update bal for inst #{inspect(inst)} and send #{inspect(leader)} prepared")
 
             #  Send a prepared message to the leader with the received ballot b,
             #  the ballot 'a_bal' from the received message, and the value 'a_val' from the received message
@@ -238,7 +244,7 @@ defmodule Paxos do
 
           else
             # if it is not, send a nack message to the leader with the received ballot b
-            IO.puts("#{inspect(state.name)} sent nack to the leader #{inspect(state.leader)}, ballot is #{inspect(b)}")
+            log("#{inspect(state.name)} sent nack to the leader #{inspect(state.leader)}, ballot is #{inspect(b)}")
             Utils.unicast(leader, {:nack, b, inst})
             state
           end
@@ -249,9 +255,9 @@ defmodule Paxos do
 
 
       {:prepared, b, a_bal, a_val, inst} ->
-        # IO.puts("inst coming in is #{inspect(inst)}, but state inst is #{inspect(state.inst)}")
+        # log("inst coming in is #{inspect(inst)}, but state inst is #{inspect(state.inst)}")
         if inst == state.inst do
-          # IO.puts("prepared #{inspect(state.name)} for inst #{inspect(inst)}")
+          # log("prepared #{inspect(state.name)} for inst #{inspect(inst)}")
           # increment quorum of processes who sent prepared
           state = %{state | preparedQuorum: state.preparedQuorum+1}
 
@@ -274,27 +280,27 @@ defmodule Paxos do
           # need to check if this process is the leader
           if(state.leader == state.name) do
             # now check if there is a quorum
-            IO.puts("#{inspect(state.leader)} is checking if there is a quorum for prepared: #{inspect(state.preparedQuorum)}")
+            log("#{inspect(state.leader)} is checking if there is a quorum for prepared: #{inspect(state.preparedQuorum)}")
             if(state.preparedQuorum >= (floor(length(state.participants)/2) +1)) do
-              IO.puts("reached quorum for prepared")
+              log("reached quorum for prepared")
 
               state= if state.a_val_max == nil do
                 # If the value 'a_val' from the received message is nil, then V will be the leader's proposal (or the heard proposal if it doesnt have one)
-                # IO.puts("#{state.name} own proposal: #{inspect(state.ownProposal)}")
-                # IO.puts("#{state.name} heard proposal: #{inspect(state.heardProposal)}")
+                # log("#{state.name} own proposal: #{inspect(state.ownProposal)}")
+                # log("#{state.name} heard proposal: #{inspect(state.heardProposal)}")
 
                 if state.ownProposal != nil do
-                  IO.puts("leader #{inspect(state.leader)} is using own proposal, which is #{inspect(state.ownProposal)}")
+                  log("leader #{inspect(state.leader)} is using own proposal, which is #{inspect(state.ownProposal)}")
                   v = state.ownProposal
                   %{state | value: v}
 
                 else
                   v = state.heardProposal
-                  IO.puts("leader #{inspect(state.leader)} is using heard proposal, which is #{inspect(state.heardProposal)}")
+                  log("leader #{inspect(state.leader)} is using heard proposal, which is #{inspect(state.heardProposal)}")
                   %{state | value: v}
                 end
               else
-                IO.puts("leader #{state.leader} is using a_val, which is #{inspect(state.a_val_max)}")
+                log("leader #{state.leader} is using a_val, which is #{inspect(state.a_val_max)}")
                 # If a_val is not nil, set the state's value to a_val
                 v = state.a_val_max
                 %{state | value: v}
@@ -302,7 +308,7 @@ defmodule Paxos do
               end
 
               # Broadcast the message to all participants
-              IO.puts("broadcast accept to participants, #{inspect(state.value)}")
+              log("broadcast accept to participants, #{inspect(state.value)}")
               Utils.beb_broadcast(state.participants, {:accept, b, state.value, state.name, inst})
               state
             end
@@ -311,22 +317,22 @@ defmodule Paxos do
         else
           state
         end
-        # IO.puts("not the right state, ignore: inst #{inspect(inst)}")
+        # log("not the right state, ignore: inst #{inspect(inst)}")
         # state
 
 
       {:accept, b, v, sender, inst} ->
         if inst == state.inst do
           # Check if the ballot b is greater than the current ballot
-          # IO.puts("in accept, b is #{inspect(b)} and state.bal is #{inspect(state.bal)}")
+          # log("in accept, b is #{inspect(b)} and state.bal is #{inspect(state.bal)}")
          # if(b >= state.bal) do
           if Utils.compare_ballot(b, &>=/2, state.bal) do
-            IO.puts("#{inspect(state.name)} in accept, b>state.bal, so update bal, a_val, and a_bal")
+            log("#{inspect(state.name)} in accept, b>state.bal, so update bal, a_val, and a_bal")
 
             # Send an accepted message to the leader with the received ballot b
             Utils.unicast(sender, {:accepted, b, inst})
 
-            # IO.puts("a_val is #{inspect(v)}, a_bal is #{inspect(b)}")
+            # log("a_val is #{inspect(v)}, a_bal is #{inspect(b)}")
 
                       # Update the ballot, a_val, and a_bal
             %{state | bal: b, a_val: v, a_bal: b}
@@ -334,7 +340,7 @@ defmodule Paxos do
             # If b is not greater than the current ballot,
             # send a nack message to the leader with the received ballot b
 
-            IO.puts("#{inspect(state.name)}: in accept, b < state.bal, so send nack to the leader #{state.leader}")
+            log("#{inspect(state.name)}: in accept, b < state.bal, so send nack to the leader #{state.leader}")
             Utils.unicast(sender, {:nack, b, inst})
             state
           end
@@ -354,11 +360,11 @@ defmodule Paxos do
           if(state.leader == state.name) do
             if(state.acceptedQuorum >= (floor(length(state.participants)/2) +1)) do # check if there is a quorum of accepted
 
-            IO.puts("in accepted, there is a quorum, so leader #{state.leader} sends decision to parent and participants")
-         #   IO.puts("in accepted, the value is #{inspect(state.a_val)} and the instance is #{inspect(state.inst)}")
+            log("in accepted, there is a quorum, so leader #{state.leader} sends decision to parent and participants")
+         #   log("in accepted, the value is #{inspect(state.a_val)} and the instance is #{inspect(state.inst)}")
 
               if state.action == :kill_before_decision do
-                IO.puts("#{state.name} going to kill my self because of your actions")
+                log("#{state.name} going to kill my self because of your actions")
                 Process.exit(self(), :kill)
               end
               # Broadcast the decision to the parent process (i.e., the process that started Paxos)
@@ -376,7 +382,7 @@ defmodule Paxos do
 
             end
           else
-            IO.puts("no quorum reached for accepted yet")
+            log("no quorum reached for accepted yet")
             state
           end
 
@@ -390,20 +396,20 @@ defmodule Paxos do
 
       {:nack, b, inst} ->
         # Broadcast the abort message to the parent process
-        IO.puts("#{inspect(elem(b,0))} and #{inspect(elem(state.bal, 0))}")
+        log("#{inspect(elem(b,0))} and #{inspect(elem(state.bal, 0))}")
         if state.inst == inst  do
-          IO.puts("#{inspect(state.name)} NACK for bal #{inspect(b)}")
+          log("#{inspect(state.name)} NACK for bal #{inspect(b)}")
           # check if process is the leader and has the same ballot number
           if state.leader == state.name do
-          #  IO.puts("#{inspect(state.name)} ready to abort")
+          #  log("#{inspect(state.name)} ready to abort")
             # if the process has a parent pid, then send the abort to it
             if state.parent_pid != nil do
               send(state.parent_pid, {:abort})
-              IO.puts("#{inspect(state.name)} broadcasting abort to parent for inst #{inspect(inst)}")
+              log("#{inspect(state.name)} broadcasting abort to parent for inst #{inspect(inst)}")
               Utils.beb_broadcast(state.participants, {:abort, b, inst})
             end
               # process doesn't have a parent pid to inform, so just broadcast to the participants
-              IO.puts("#{inspect(state.name)} doesnt have a parent pid, so broadcast abort to the participants")
+              log("#{inspect(state.name)} doesnt have a parent pid, so broadcast abort to the participants")
               Utils.beb_broadcast(state.participants, {:abort, b, inst})
           end
         end
@@ -413,15 +419,15 @@ defmodule Paxos do
       # {:timeout} ->
       #   # Broadcast the timeout message to the parent process
       #   Utils.unicast(state.parent_name, {:timeout})
-      #   IO.puts("broadcasting timeout to parent")
+      #   log("broadcasting timeout to parent")
       #   state
 
       {:abort, b, inst} ->
         if state.inst == inst do
-          IO.puts("#{inspect(state.name)} reached the abort event for ballot #{inspect(b)}")
+          log("#{inspect(state.name)} reached the abort event for ballot #{inspect(b)}")
           if state.parent_pid != nil do
             send(state.parent_pid, {:abort})
-            IO.puts("#{inspect(state.name)} broadcasting abort to parent for inst #{inspect(inst)}")
+            log("#{inspect(state.name)} broadcasting abort to parent for inst #{inspect(inst)}")
             Utils.beb_broadcast(state.participants, {:abort, b, inst})
           end
         end
@@ -433,9 +439,9 @@ defmodule Paxos do
         # store decision and instance in a map
 
         # instance now done, so also need to remove instance from map of instances -> proposals, and set inst to nil
-        IO.puts("#{state.name} attempting to remove inst #{inst} from state.instances, which has value #{inspect(state.instances)}")
+        log("#{state.name} attempting to remove inst #{inst} from state.instances, which has value #{inspect(state.instances)}")
         state= %{state | decision: v, allDecisions: Map.put(state.allDecisions, inst, v), instances: Map.delete(state.instances, inst), inst: nil}
-        IO.puts("#{state.name} new instance map value is #{inspect(state.instances)}")
+        log("#{state.name} new instance map value is #{inspect(state.instances)}")
 
          # clear the quorums as they are no longer needed and update hasDecided
          state = %{state |
@@ -461,11 +467,11 @@ defmodule Paxos do
         # now need to check if there are any instances in instance map
         # if there are, then start broadcast
 
-      #  IO.puts("all decisions is #{inspect(state.allDecisions)}")
-     #   IO.puts("instances map is #{inspect(state.instances)}")
+      #  log("all decisions is #{inspect(state.allDecisions)}")
+     #   log("instances map is #{inspect(state.instances)}")
         foundInstance = Enum.at(Map.keys(state.instances), 0)
         foundInstanceProposal = Map.get(state.instances, foundInstance)
-        # IO.puts("first key in instances is #{inspect(Enum.at(Map.keys(state.instances), 0))},
+        # log("first key in instances is #{inspect(Enum.at(Map.keys(state.instances), 0))},
         # the tuple is #{inspect(Map.get(state.instances, foundInstance))},
         # the pid is #{inspect(Enum.at(Map.get(state.instances, foundInstance), 0))}
         # and the value is #{inspect(Enum.at(Map.get(state.instances, foundInstance), 1))}")
@@ -475,14 +481,14 @@ defmodule Paxos do
         # check if there is another instance in instances
         if(foundInstance != nil) do
           # if there is, then call broadcast for that instance
-          IO.puts("starting broadcast for new instance")
+          log("starting broadcast for new instance")
           {pid, proposals} = foundInstanceProposal
           if state.name == state.leader do
             send(self(), {:broadcast, pid, foundInstance, Enum.at(proposals, 0)})
           end
-       #   IO.puts("instance, #{inspect(foundInstance)} ")
-        #  IO.puts("pid is #{inspect(pid)}")
-         # IO.puts("proposal is #{inspect(Enum.at(proposals, 0))}")
+       #   log("instance, #{inspect(foundInstance)} ")
+        #  log("pid is #{inspect(pid)}")
+         # log("proposal is #{inspect(Enum.at(proposals, 0))}")
           #%{state | inst: foundInstance, value: Enum.at(proposals, 0)}
         # else
         #   state
@@ -518,7 +524,7 @@ defmodule Paxos do
 
     result = receive do
       {:decision, v} ->
-        IO.puts("Decision #{inspect(v)}")
+        log("Decision #{inspect(v)}")
         {:decision,v}
       {:abort} ->
         {:abort}
@@ -548,7 +554,7 @@ defmodule Paxos do
     send(pid, {:return_decision, self(), inst})
     result = receive do
       {:return_decision, v } ->
-        #IO.puts("get_decision got a decision #{inspect(v)}")
+        #log("get_decision got a decision #{inspect(v)}")
           v
       {:timeout} ->
         nil

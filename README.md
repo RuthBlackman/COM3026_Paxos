@@ -41,6 +41,6 @@ Each user will have their own instance of Paxos.
 3. ```procs = Enum.to_list(1..3) |> Enum.map(fn m -> :"p#{m}" end)```
 4. ```pids = Enum.map(procs, fn p -> InventoryServer.start(p, procs) end)```
 5. ```a = Enum.at(pids, 0)```
-6. To add an item to the inventory, use ```InventoryServer.add_to_inventory(a, 10)```
+6. To add an item to the inventory, use ```InventoryServer.add_to_inventory(a, 1, 10)```
 
 7. To kill the processes use ```pids |> Enum.map(fn p -> Process.exit(p, :kill) end)```
