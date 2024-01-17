@@ -58,6 +58,7 @@ defmodule InventoryServer do
             state
 
           {:decision, v} ->
+            state = %{state | pending: {state.last_instance + 1, client}}
             state = receive_decisions(state)
         end
     end
@@ -68,6 +69,8 @@ defmodule InventoryServer do
     IO.puts("\n\n\n\nreceive_decisions #{inspect(v)}\n\n\n\n")
     case v do
         {:add_to_inventory, client, item, amount} ->
+        IO.puts("inside add to inventory, client: #{inspect(client)}, item: #{inspect(item)}, amount: #{inspect(amount)}, i: #{inspect(i)}")
+        IO.puts("state.pending: #{inspect(state.pending)}")
           state = case state.pending do
             {^i, client} ->
               send(elem(state.pending, 1), {:add_to_inventory_ok})
