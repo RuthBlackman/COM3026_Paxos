@@ -19,7 +19,7 @@ defmodule InventoryServer do
     pax_pid: paxos,
     last_instance: 0,
     pending: {0, nil},
-    inventory: %{}, # item_id -> amount
+    inventory: %{1 => 30}, # item_id -> amount
     }
 
     run(state)
@@ -78,9 +78,12 @@ defmodule InventoryServer do
               # check if item already exists in inventory
               if Map.get(state.inventory, item) do
                 # item exists, add amount to inventory
+                IO.puts("Item already exists in inventory")
+                IO.puts("Inventory before adding: #{inspect(state.inventory)}")
                 %{state | pending: {amount, nil}, inventory: Map.put(state.inventory, item, state.inventory[item]+amount )}
               else
                 # item does not exist, add item to inventory
+                IO.puts("Item does not exist in inventory")
                 %{state | pending: {amount, nil}, inventory: Map.put(state.inventory, item, amount )}
               end
 
@@ -90,6 +93,7 @@ defmodule InventoryServer do
 
             _ -> state
           end
+        IO.puts("Inventory: #{inspect(state.inventory)}")
 #          receive_decisions(%{state | last_instance: i})
 
         {:remove_from_inventory, client, item, amount} ->
@@ -122,7 +126,7 @@ defmodule InventoryServer do
     end
     send(p, {:add_to_inventory, self(), item, amount})
     receive do
-      {:add_to_inventory_ok} -> :ok
+      {:add_to_inventory_ok} ->:ok
       {:add_to_inventory_failed} -> :fail
       {:abort} -> :fail
       _ -> :timeout
