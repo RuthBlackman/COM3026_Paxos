@@ -3,6 +3,7 @@
 # ----------------------------------------
 
 defmodule Utils do
+  def unicast(p, m) when is_pid(p), do: send(p, m)
   def unicast(p, m) do
     case :global.whereis_name(p) do
             pid when is_pid(pid) -> send(pid, m)

@@ -28,8 +28,7 @@ defmodule InventoryServer do
   def run(state) do
     IO.puts("In run")
     state = receive do
-      # TODO: ADD TO INVENTORY OPTION NEEDS TO BE ADDED HERE
-      {trans, client, _, _} = t when trans == :add_to_inventory or :remove_from_inventory ->
+      {trans, client, _, _} = t when trans == :remove_from_inventory or trans == :add_to_inventory ->
         IO.puts("waiting for paxos")
         v = Paxos.propose(state.pax_pid, state.last_instance + 1, t, 1000)
         IO.puts("\n\n\n\nv: #{inspect v}\n\n\n\n")
@@ -82,6 +81,9 @@ defmodule InventoryServer do
 
             _ -> state
           end
+        else
+          send(elem(state.pending, 1), {:add_to_inventory_failed})
+          %{state | pending: {amount, nil}}
         end
         IO.puts("Inventory: #{inspect(state.inventory)}")
         state
@@ -131,7 +133,7 @@ defmodule InventoryServer do
 #    if amount <= 0 do
 #      raise("add_to_inventory failed: item must be positive")
 #    end
-    send(p, {:add_to_inventory, self(), item, amount})
+    Utils.unicast(p, {:add_to_inventory, self(), item, amount})
     receive do
       {:add_to_inventory_ok} ->:ok
       {:add_to_inventory_failed} -> :fail
@@ -147,7 +149,7 @@ defmodule InventoryServer do
 #      IO.puts("remove_from_inventory failed: item must be positive")
 #    end
     IO.puts("remove_from_inventory, item: #{inspect(item)}, amount: #{inspect(amount)}, p: #{inspect(p)}")
-    send(p, {:remove_from_inventory, self(), item, amount})
+    Util.unicast(p, {:remove_from_inventory, self(), item, amount})
     IO.puts("remove_from_inventory, item: #{inspect(item)}, amount: #{inspect(amount)}, p: #{inspect(p)}")
     receive do
       {:remove_from_inventory_ok} -> :ok
