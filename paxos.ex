@@ -3,6 +3,7 @@
 # ----------------------------
 defmodule Paxos do
 
+  # change to true to view Paxos logs
   def log(msg) do
     if false do
       IO.puts(msg)
@@ -18,7 +19,6 @@ defmodule Paxos do
 
     # Return the pid
     pid
-
   end
 
   def init(name, participants) do
@@ -55,8 +55,6 @@ defmodule Paxos do
     run(state)
   end
 
-
-
   def run(state) do
     state = receive do
       {:check_instance, pid, inst, value, action} ->
@@ -83,7 +81,6 @@ defmodule Paxos do
 
             %{state| bal: Utils.increment_ballot_number(state.bal, state.name)}
           else
-
 
             log("checking if instance #{inspect(inst)} is in map of instances")
             # decision has not been made yet, so check if instance is in map of instances -> proposals
@@ -112,7 +109,6 @@ defmodule Paxos do
           state
         end
 
-
       {:return_decision, pid, inst} ->
         # return the decision for a given instance
 
@@ -121,7 +117,6 @@ defmodule Paxos do
 
         send(pid, {:return_decision, inst_decision })
         state
-
 
       {:broadcast_proposal, value, inst} ->
         # if a process hears another process's proposal, it will store it
@@ -136,7 +131,6 @@ defmodule Paxos do
         end
 
         state
-
 
       {:broadcast, pid, inst, value} ->
         log("#{state.name} is starting broadcast state...")
@@ -175,7 +169,6 @@ defmodule Paxos do
 
         end
 
-
         # new leader was elected, so need to start the whole paxos algorithm again
         %{state | leader: p, bal: state.bal}
 
@@ -206,7 +199,6 @@ defmodule Paxos do
         else
           state
         end
-
 
       {:prepared, b, a_bal, a_val, inst} ->
         if inst == state.inst do
@@ -339,9 +331,7 @@ defmodule Paxos do
           state
         else
           state
-
         end
-
 
       {:nack, b, inst} ->
         # Broadcast the abort message to the parent process
@@ -424,8 +414,6 @@ defmodule Paxos do
     run(state)
   end
 
-
-
   # ----------------------------------
   # Application functions
   # ----------------------------------
@@ -445,7 +433,6 @@ defmodule Paxos do
       t -> {:timeout}
     end
   end
-
 
   def get_decision(pid, inst, t) do
 #    Process.send_after(self(), {:timeout}, t) # start timeout
@@ -519,20 +506,12 @@ defmodule Utils do
     if a<b do
       -1
     end
-
-
   end
 
   def increment_ballot_number(ballot_tuple, leader) do
     {elem(ballot_tuple,0)+1, leader}
 
   end
-
-  # # Converts a ballot reference to the raw ballot index.
-  # defp ballot_ref_to_index(ballot) do
-  #   elem(ballot, 1)
-  # end
-
 end
 
 # ----------------------------------------
@@ -594,20 +573,12 @@ defmodule Utils do
     if a<b do
       -1
     end
-
-
   end
 
   def increment_ballot_number(ballot_tuple, leader) do
     {elem(ballot_tuple,0)+1, leader}
 
   end
-
-  # # Converts a ballot reference to the raw ballot index.
-  # defp ballot_ref_to_index(ballot) do
-  #   elem(ballot, 1)
-  # end
-
 end
 
 # ----------------------------------------
@@ -672,11 +643,9 @@ defmodule EventualLeaderDetector do
         #receive heartbeat reply and add process to alive
         %{state | alive: MapSet.put(state.alive, name)}
 
-
     end
     run(state)
   end
-
 
   def elect_leader(state) do
     # order alive from smallest to largest pid

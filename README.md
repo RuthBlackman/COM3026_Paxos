@@ -47,6 +47,7 @@ Each user will have their own instance of Paxos.
 # Assumptions #
 
 * The service will be run on a trusted machine.
+*
 
 # Usage Instructions #
 
@@ -79,7 +80,7 @@ pids = Enum.map(procs, fn p -> InventoryServer.start(p, procs) end)
 5. To add an item to the inventory
 
 ```
-InventoryServer.add_to_inventory(p0, item, amount)
+InventoryServer.add_to_inventory(:p0, item, amount)
 ```
 
 - where
@@ -89,14 +90,23 @@ InventoryServer.add_to_inventory(p0, item, amount)
 6. To remove an item from the inventory
 
 ```
-InventoryServer.remove_from_inventory(p0, item, amount)
+InventoryServer.remove_from_inventory(:p0, item, amount)
 ```
 
 - where
     - item is replaced with the item number
     - amount is replaced with the amount of the item to be added to the inventory
 
-7. To end the session and kill the processes
+7. To view the inventory
+
+```
+InventoryServer.view_inventory(:a)
+```
+
+- where
+    - a is replaced with the client name
+
+8. To end the session and kill the processes
 
 ```
 pids |> Enum.map(fn p -> Process.exit(p, :kill) end)
@@ -142,7 +152,7 @@ pids = Enum.map(procs, fn p -> InventoryServer.start(p, procs) end)
 7. To add an item to the inventory
 
 ```
-InventoryServer.add_to_inventory(a, item, amount)
+InventoryServer.add_to_inventory(:a, item, amount)
 ```
 
 - where
@@ -153,13 +163,22 @@ InventoryServer.add_to_inventory(a, item, amount)
 8. To remove an item from the inventory
 
 ```
-InventoryServer.remove_from_inventory(a, item, amount)
+InventoryServer.remove_from_inventory(:a, item, amount)
 ```
 
 - where
     - a is replaced with the client name
     - item is replaced with the item number
     - amount is replaced with the amount of the item to be added to the inventory
+
+9. To view the inventory
+
+```
+InventoryServer.view_inventory(:a)
+```
+
+- where
+    - a is replaced with the client name
 
 9. To end the session and kill the processes
 
