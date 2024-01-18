@@ -459,3 +459,243 @@ defmodule Paxos do
     end
   end
 end
+
+# ----------------------------------------
+# Utils
+# ----------------------------------------
+
+defmodule Utils do
+  def unicast(p, m) when is_pid(p), do: send(p, m)
+  def unicast(p, m) do
+    case :global.whereis_name(p) do
+      pid when is_pid(pid) -> send(pid, m)
+      :undefined -> :ok
+    end
+  end
+
+  # Best-effort broadcast of m to the set of destinations dest
+  def beb_broadcast(dest, m), do: for p <- dest, do: unicast(p, m)
+
+  def add_to_name(name, to_add), do: String.to_atom(Atom.to_string(name) <> to_add)
+
+  def register_name(name, pid, link \\ true) do # \\ is default value
+    case :global.re_register_name(name, pid) do
+      :yes ->
+        # Note this is running on the parent so we are linking the parent to the rb
+        # so that when we close the parent the rb also dies
+        if link do
+          Process.link(pid)
+        end
+
+        pid
+
+      :no ->
+        Process.exit(pid, :kill)
+        :error
+    end
+  end
+
+  # ----------------------------------------------
+  # functions for comparing ballot and process id
+  # ----------------------------------------------
+  def compare_ballot(left, operator, right) do
+    operator.(ballot_compare(left, right),0)
+  end
+
+  defp ballot_compare(a, b) do
+    diff = elem(a, 0) - elem(b, 0)
+    if diff == 0, do: lexicographical_compare(elem(a, 1), elem(b, 1)), else: diff
+  end
+
+  def lexicographical_compare(a, b) do
+    if a == b do
+      0
+    end
+
+    if a>b do
+      1
+    end
+
+    if a<b do
+      -1
+    end
+
+
+  end
+
+  def increment_ballot_number(ballot_tuple, leader) do
+    {elem(ballot_tuple,0)+1, leader}
+
+  end
+
+  # # Converts a ballot reference to the raw ballot index.
+  # defp ballot_ref_to_index(ballot) do
+  #   elem(ballot, 1)
+  # end
+
+end
+
+# ----------------------------------------
+# Utils
+# ----------------------------------------
+
+defmodule Utils do
+  def unicast(p, m) when is_pid(p), do: send(p, m)
+  def unicast(p, m) do
+    case :global.whereis_name(p) do
+      pid when is_pid(pid) -> send(pid, m)
+      :undefined -> :ok
+    end
+  end
+
+  # Best-effort broadcast of m to the set of destinations dest
+  def beb_broadcast(dest, m), do: for p <- dest, do: unicast(p, m)
+
+  def add_to_name(name, to_add), do: String.to_atom(Atom.to_string(name) <> to_add)
+
+  def register_name(name, pid, link \\ true) do # \\ is default value
+    case :global.re_register_name(name, pid) do
+      :yes ->
+        # Note this is running on the parent so we are linking the parent to the rb
+        # so that when we close the parent the rb also dies
+        if link do
+          Process.link(pid)
+        end
+
+        pid
+
+      :no ->
+        Process.exit(pid, :kill)
+        :error
+    end
+  end
+
+  # ----------------------------------------------
+  # functions for comparing ballot and process id
+  # ----------------------------------------------
+  def compare_ballot(left, operator, right) do
+    operator.(ballot_compare(left, right),0)
+  end
+
+  defp ballot_compare(a, b) do
+    diff = elem(a, 0) - elem(b, 0)
+    if diff == 0, do: lexicographical_compare(elem(a, 1), elem(b, 1)), else: diff
+  end
+
+  def lexicographical_compare(a, b) do
+    if a == b do
+      0
+    end
+
+    if a>b do
+      1
+    end
+
+    if a<b do
+      -1
+    end
+
+
+  end
+
+  def increment_ballot_number(ballot_tuple, leader) do
+    {elem(ballot_tuple,0)+1, leader}
+
+  end
+
+  # # Converts a ballot reference to the raw ballot index.
+  # defp ballot_ref_to_index(ballot) do
+  #   elem(ballot, 1)
+  # end
+
+end
+
+# ----------------------------------------
+# EventualLeaderDetector
+# ----------------------------------------
+
+defmodule EventualLeaderDetector do
+
+  def start(name, participants) do
+    # edit name to include leader_election - means it won't get mixed up with other processes
+    new_name = Utils.add_to_name(name, "leader_election");
+
+    # in participants, change all the names and then save to participants
+    participants = Enum.map(participants, fn x -> Utils.add_to_name(x, "leader_election") end);
+
+    # spawn leader election
+    pid = spawn(EventualLeaderDetector, :init, [new_name, participants, name]); # atom name = pid
+
+    # register name
+    Utils.register_name(new_name, pid);
+
+  end
+
+  def init(name, participants, parent_name) do
+    state = %{
+      name: name,
+      participants: participants,
+      parent_name: parent_name, # process that owns leader elector
+      leader: nil,
+      timeout: 1000,
+      alive: %MapSet{},
+    }
+
+    Process.send_after(self(), {:timeout}, state.timeout) # start timeout
+
+    run(state)
+  end
+
+  def run(state) do
+
+    state = receive do
+      {:timeout} ->
+        # send heartbeat request to all processes
+        Utils.beb_broadcast(state.participants, {:heartbeat_request, self()})
+
+        # start restart timeout if timeout is reached
+        Process.send_after(self(), {:timeout}, state.timeout)
+
+        # elect leader from alive
+        state = elect_leader(state)
+
+        # clear alive - this is so that a process that has crashed is not stuck in alive
+        %{state | alive: %MapSet{}}
+
+      {:heartbeat_request, pid} ->
+        # send heartbeat
+        send(pid, {:heartbeat_reply, state.parent_name})
+
+        state
+
+      {:heartbeat_reply, name} ->
+        #receive heartbeat reply and add process to alive
+        %{state | alive: MapSet.put(state.alive, name)}
+
+
+    end
+    run(state)
+  end
+
+
+  def elect_leader(state) do
+    # order alive from smallest to largest pid
+    sorted_processes = Enum.sort(state.alive) # returns a list of the sorted processes
+
+    # check if there are any processes are alive
+    if(MapSet.size(state.alive) > 0) do
+      first_process = Enum.at(sorted_processes, 0)
+
+      # if process is not already leader, then make it leader
+      if(first_process != state.leader) do
+        Utils.unicast(state.parent_name, {:leader_elect, first_process})
+        %{state | leader: first_process}
+        # if process is already leader, then don't change the state
+      else
+        state
+      end
+    else
+      state
+    end
+  end
+end

@@ -15,6 +15,7 @@ defmodule InventoryServer do
     paxos = Paxos.start(Utils.add_to_name(name, "_pax"), Enum.map(servers, fn s -> Utils.add_to_name(s, "_pax") end))
 
     state = %{
+
     name: name,
     pax_pid: paxos,
     last_instance: 0,
