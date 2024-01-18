@@ -1,6 +1,10 @@
-- README file detailing the service API (4 marks), 
-- usage instructions and any assumptions that have been made (3 marks), 
-- and safety and liveness properties (3 marks): 10 marks
+- README file detailing the service API (4 marks)
+- Usage instructions and any assumptions that have been made (3 marks)
+- And safety and liveness properties (3 marks): 10 marks
+
+### Team Members ###
+- Angeliki (Angelique) Baltsoukou - 6634908
+- Ruth Blackman - 
 
 # About Service #
 This service is a simple implementation of an inventory management system using the Paxos algorithm.

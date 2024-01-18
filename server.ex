@@ -97,9 +97,12 @@ defmodule InventoryServer do
 #          receive_decisions(%{state | last_instance: i})
 
         {:remove_from_inventory, client, item, amount} ->
+          IO.puts("inside remove from inventory, client: #{inspect(client)}, item: #{inspect(item)}, amount: #{inspect(amount)}, i: #{inspect(i)}")
+          IO.puts("state.pending: #{inspect(state.pending)}")
+
           state = case state.pending do
            {^i, client} ->
-             if Map.get(state.inventory, item) == nil || state.inventory[item] - amount <0 do
+             if Map.get(state.inventory, item) == nil || state.inventory[item] - amount < 0 do
                # unable to remove from inventory because it either doesn't exist, or the amount would be negative
                send(elem(state.pending, 1), {:abort})
                 %{state | pending: {amount, nil}}
@@ -108,9 +111,12 @@ defmodule InventoryServer do
                 send(elem(state.pending, 1), {:remove_from_inventory_ok})
                 %{state | pending: {amount, nil}, inventory: Map.put(state.inventory, item, state.inventory[item]-amount)}
              end
+
            {^i, _} ->
             send(elem(state.pending, 1), {:remove_from_inventory_failed})
             %{state | pending: {amount, nil}}
+
+            _ -> state
           end
           receive_decisions(%{state | last_instance: i})
         nil -> state
