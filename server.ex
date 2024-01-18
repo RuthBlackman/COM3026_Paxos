@@ -25,27 +25,12 @@ defmodule InventoryServer do
     run(state)
   end
 
-#  def run(state) do
-#    state = receive do
-#      {trans, client, _, _} = t when trans == :add_to_inventory or :remove_from_inventory ->
-#        state = receive do
-#          case Paxos.propose(state.pax_pid, state.last_instance + 1, t, 1000) do
-#            {:abort} ->
-#              send(client, {:abort})
-#
-#            {:timeout} ->
-#              send(client, {:timeout})
-#
-#            {:decision, v} ->
-#              state = receive_decisions(state)
-#          end
-#        end
-#    end
-#  end
-
   def run(state) do
+    IO.puts("In run")
     state = receive do
+      # TODO: ADD TO INVENTORY OPTION NEEDS TO BE ADDED HERE
       {trans, client, _, _} = t when trans == :add_to_inventory or :remove_from_inventory ->
+        IO.puts("waiting for paxos")
         v = Paxos.propose(state.pax_pid, state.last_instance + 1, t, 1000)
         IO.puts("\n\n\n\nv: #{inspect v}\n\n\n\n")
         case v do
@@ -62,15 +47,19 @@ defmodule InventoryServer do
             state = receive_decisions(state)
         end
     end
+    run(state)
   end
 
   def receive_decisions(state) do
-    v = Paxos.get_decision(state.pax_pid, i = state.last_instance + 1, 1000)
+    i = state.last_instance + 1
+    IO.puts("state.pax_pid: #{inspect(state.pax_pid)}, state.last_instance: #{inspect(i)}")
+    v = Paxos.get_decision(state.pax_pid, i, 1000)
     IO.puts("\n\n\n\nreceive_decisions #{inspect(v)}\n\n\n\n")
     case v do
-        {:add_to_inventory, client, item, amount} ->
+      {:add_to_inventory, client, item, amount} ->
         IO.puts("inside add to inventory, client: #{inspect(client)}, item: #{inspect(item)}, amount: #{inspect(amount)}, i: #{inspect(i)}")
         IO.puts("state.pending: #{inspect(state.pending)}")
+        state = if amount > 0 do
           state = case state.pending do
             {^i, client} ->
               send(elem(state.pending, 1), {:add_to_inventory_ok})
@@ -93,43 +82,55 @@ defmodule InventoryServer do
 
             _ -> state
           end
+        end
         IO.puts("Inventory: #{inspect(state.inventory)}")
-#          receive_decisions(%{state | last_instance: i})
+        state
+        %{state | last_instance: i}
 
-        {:remove_from_inventory, client, item, amount} ->
-          IO.puts("inside remove from inventory, client: #{inspect(client)}, item: #{inspect(item)}, amount: #{inspect(amount)}, i: #{inspect(i)}")
-          IO.puts("state.pending: #{inspect(state.pending)}")
+      {:remove_from_inventory, client, item, amount} ->
+        IO.puts("inside remove from inventory, client: #{inspect(client)}, item: #{inspect(item)}, amount: #{inspect(amount)}, i: #{inspect(i)}")
+        IO.puts("state.pending: #{inspect(state.pending)}")
 
+        state = if amount > 0 do
           state = case state.pending do
-           {^i, client} ->
-             if Map.get(state.inventory, item) == nil || state.inventory[item] - amount < 0 do
-               # unable to remove from inventory because it either doesn't exist, or the amount would be negative
-               send(elem(state.pending, 1), {:abort})
+            {^i, client} ->
+              if Map.get(state.inventory, item) == nil || state.inventory[item] - amount < 0 do
+                # unable to remove from inventory because it either doesn't exist, or the amount would be negative
+                send(elem(state.pending, 1), {:abort})
                 %{state | pending: {amount, nil}}
               else
                 # remove from inventory
                 send(elem(state.pending, 1), {:remove_from_inventory_ok})
+                IO.puts("Inside remove from inventory, amount: #{inspect(Map.put(state.inventory, item, state.inventory[item]-amount))}")
                 %{state | pending: {amount, nil}, inventory: Map.put(state.inventory, item, state.inventory[item]-amount)}
-             end
+              end
 
-           {^i, _} ->
-            send(elem(state.pending, 1), {:remove_from_inventory_failed})
-            %{state | pending: {amount, nil}}
+            {^i, _} ->
+              send(elem(state.pending, 1), {:remove_from_inventory_failed})
+              %{state | pending: {amount, nil}}
 
             _ -> state
           end
-          receive_decisions(%{state | last_instance: i})
-        nil -> state
+        else
+          send(elem(state.pending, 1), {:remove_from_inventory_failed})
+          %{state | pending: {amount, nil}}
+        end
+
+        IO.puts("Inventory: #{inspect(state.inventory)}")
+        state
+        %{state | last_instance: i}
+
+      nil ->
+       IO.puts("Inventory: #{inspect(state.inventory)}")
+       state
     end
   end
 
-
-
   # add item to inventory
   def add_to_inventory(p, item, amount) do
-    if amount < 0 do
-      raise("add_to_inventory failed: item must be positive")
-    end
+#    if amount <= 0 do
+#      raise("add_to_inventory failed: item must be positive")
+#    end
     send(p, {:add_to_inventory, self(), item, amount})
     receive do
       {:add_to_inventory_ok} ->:ok
@@ -142,21 +143,18 @@ defmodule InventoryServer do
 
   # remove item from inventory
   def remove_from_inventory(p, item, amount) do
-    if amount < 0 do
-      raise("remove_from_inventory failed: item must be positive")
-    end
+#    if amount <= 0 do
+#      IO.puts("remove_from_inventory failed: item must be positive")
+#    end
+    IO.puts("remove_from_inventory, item: #{inspect(item)}, amount: #{inspect(amount)}, p: #{inspect(p)}")
     send(p, {:remove_from_inventory, self(), item, amount})
+    IO.puts("remove_from_inventory, item: #{inspect(item)}, amount: #{inspect(amount)}, p: #{inspect(p)}")
     receive do
       {:remove_from_inventory_ok} -> :ok
       {:remove_from_inventory_failed} -> :fail
       {:abort} -> :fail
       _ -> :timeout
+      after 1000 -> :timeout
     end
   end
-
-  # check inventory
-#  def check_inventory(p) do
-#
-#  end
-
 end

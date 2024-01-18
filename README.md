@@ -4,7 +4,7 @@
 
 ### Team Members ###
 - Angeliki (Angelique) Baltsoukou - 6634908
-- Ruth Blackman - 
+- Ruth Blackman - 6623139
 
 # About Service #
 This service is a simple implementation of an inventory management system using the Paxos algorithm.
