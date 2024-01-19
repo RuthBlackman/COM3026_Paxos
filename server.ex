@@ -43,8 +43,13 @@ defmodule InventoryServer do
         # handle transactions
         if amount <= 0 do
           # if the amount is invalid, notify the client and return the current state
-          send(elem(state.pending, 1), {:add_to_inventory_failed})
-          state
+          if (trans == :remove_from_inventory) do
+            send(client,  {:remove_from_inventory_failed})
+            state
+          else
+            send(client, {:add_to_inventory_failed})
+            state
+          end
         else
           IO.puts("waiting for paxos")
           # propose the transaction to Paxos
@@ -65,8 +70,11 @@ defmodule InventoryServer do
 
             {:decision, v} ->
               # If Paxos reaches a decision, update the pending transaction and handle the decision
+
               state = %{state | pending: {state.last_instance + 1, client}}
+              IO.puts("decision was made by paxos, pending is: #{inspect(state.pending)}")
               state = receive_decisions(state, false)
+
           end
         end
     end
