@@ -45,6 +45,12 @@ ensures consistent and fault-tolerant decision-making in a distributed environme
 
 # Server Implementation #
 
+## Considerations ##
+
+- A process will only recieve an ```:ok``` message when its inventory is up to date and the request has been completed.
+- Therefore, a ```:timeout``` or ```:fail``` may appear as an update is in progress.
+- This may require the client to make the request again, until it receives an ```:ok``` message.
+
 ## Viewing the Inventory ## 
 
 - The client sends the ```view_inventory``` request to the server.

@@ -3,7 +3,7 @@
 # ----------------------------
 defmodule Paxos do
 
-  # change to true to view Paxos logs
+  # change to true to view logs
   def log(msg) do
     if false do
       IO.puts(msg)
@@ -68,7 +68,6 @@ defmodule Paxos do
 
         # if a decision has already been made, then just return decision
         if potentialDecision != nil do
-          IO.puts("hear 1")
           send(state.parent_name, {:decision, potentialDecision})
           state
 
@@ -297,7 +296,6 @@ defmodule Paxos do
 
               # check if parent_name exists, if it does, then send decision. if it doesnt exist, then there was no proposal so ignore it
               if state.parent_name != nil do
-              IO.puts("hear 2 for process #{inspect(state.name)}")
                 send(state.parent_name, {:decision, state.a_val})
               end
 
@@ -408,7 +406,6 @@ defmodule Paxos do
 
     result = receive do
       {:decision, v} ->
-        IO.puts("Decision #{inspect(v)}")
         {:decision,v}
       {:abort} ->
         {:abort}

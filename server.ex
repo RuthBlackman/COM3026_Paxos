@@ -1,5 +1,12 @@
 defmodule InventoryServer do
 
+  # change to true to view logs
+  def log(msg) do
+    if false do
+      log(msg)
+    end
+  end
+
   # start the server
   def start(name, servers) do
     # spawn a new process using the init function from the InventoryServer module
@@ -9,7 +16,7 @@ defmodule InventoryServer do
       :yes -> pid
       :no -> nil
     end
-    IO.puts(if pid, do: "registered #{name}", else: "failed to register #{name}")
+    log(if pid, do: "registered #{name}", else: "failed to register #{name}")
     # return the pid of the spawned process
     pid
   end
@@ -32,7 +39,7 @@ defmodule InventoryServer do
 
   # Function to continuously run the system, handling different types of requests
   def run(state) do
-    IO.puts("In run")
+    log("In run")
     # receive a request from a client
     state = receive do
       {:view_inventory, client} ->
@@ -51,10 +58,10 @@ defmodule InventoryServer do
             state
           end
         else
-          IO.puts("waiting for paxos")
+          log("waiting for paxos")
           # propose the transaction to Paxos
           v = Paxos.propose(state.pax_pid, state.last_instance + 1, {trans, {state.name, state.sequence}, item_id, amount}, 1000)
-          IO.puts("\n\n\n\nv: #{inspect v}\n\n\n\n")
+          log("\n\n\n\nv: #{inspect v}\n\n\n\n")
 
           # handle the response from Paxos
           case v do
@@ -72,7 +79,7 @@ defmodule InventoryServer do
               # If Paxos reaches a decision, update the pending transaction and handle the decision
 
               state = %{state | pending: {state.last_instance + 1, client}}
-              IO.puts("decision was made by paxos, pending is: #{inspect(state.pending)}")
+              log("decision was made by paxos, pending is: #{inspect(state.pending)}")
               state = receive_decisions(state, false)
 
           end
@@ -86,17 +93,17 @@ defmodule InventoryServer do
   def receive_decisions(state, run_again) do
     # increment the instance
     i = state.last_instance + 1
-    IO.puts("state.pax_pid: #{inspect(state.pax_pid)}, state.last_instance: #{inspect(i)}")
+    log("state.pax_pid: #{inspect(state.pax_pid)}, state.last_instance: #{inspect(i)}")
 
     # get the decision from Paxos
     v = Paxos.get_decision(state.pax_pid, i, 1000)
-    IO.puts("\n\n\n\nreceive_decisions #{inspect(v)}\n\n\n\n")
+    log("\n\n\n\nreceive_decisions #{inspect(v)}\n\n\n\n")
 
     # update the state based on the decision
     case v do
       {:add_to_inventory, client, item, amount} ->
-        IO.puts("inside add to inventory, client: #{inspect(client)}, item: #{inspect(item)}, amount: #{inspect(amount)}, i: #{inspect(i)}")
-        IO.puts("state.pending: #{inspect(state.pending)}")
+        log("inside add to inventory, client: #{inspect(client)}, item: #{inspect(item)}, amount: #{inspect(amount)}, i: #{inspect(i)}")
+        log("state.pending: #{inspect(state.pending)}")
 
         # check if there is a pending transaction
         state = cond do
@@ -106,7 +113,7 @@ defmodule InventoryServer do
             send(elem(state.pending, 1), {:add_to_inventory_ok})
             %{state | sequence: state.sequence + 1}
           true ->
-          IO.puts("inside add_to_inventory, pending is: #{inspect(state.pending)}")
+          log("inside add_to_inventory, pending is: #{inspect(state.pending)}")
             send(elem(state.pending, 1), {:add_to_inventory_failed})
             state
         end
@@ -116,7 +123,7 @@ defmodule InventoryServer do
 
         # Update the instance counter and recursively call the function if run_again is true
         state = %{state | last_instance: i}
-        IO.puts("Inventory: #{inspect(state.inventory)}")
+        log("Inventory: #{inspect(state.inventory)}")
         state = %{state | last_instance: i}
         if run_again do
           receive_decisions(state, run_again)
@@ -125,8 +132,8 @@ defmodule InventoryServer do
         end
 
       {:remove_from_inventory, client, item, amount} ->
-        IO.puts("inside remove from inventory, client: #{inspect(client)}, item: #{inspect(item)}, amount: #{inspect(amount)}, i: #{inspect(i)}")
-        IO.puts("state.pending: #{inspect(state.pending)}")
+        log("inside remove from inventory, client: #{inspect(client)}, item: #{inspect(item)}, amount: #{inspect(amount)}, i: #{inspect(i)}")
+        log("state.pending: #{inspect(state.pending)}")
 
         # check if there is a pending transaction
         state = cond do
@@ -138,7 +145,7 @@ defmodule InventoryServer do
             else
               # remove from inventory
               send(elem(state.pending, 1), {:remove_from_inventory_ok})
-              IO.puts("Inside remove from inventory, amount: #{inspect(Map.put(state.inventory, item, state.inventory[item]-amount))}")
+              log("Inside remove from inventory, amount: #{inspect(Map.put(state.inventory, item, state.inventory[item]-amount))}")
             end
             %{state | sequence: state.sequence + 1}
           true ->
@@ -152,11 +159,11 @@ defmodule InventoryServer do
           %{state | pending: nil}
         else
           # remove from inventory
-          IO.puts("Inside remove from inventory, amount: #{inspect(Map.put(state.inventory, item, state.inventory[item]-amount))}")
+          log("Inside remove from inventory, amount: #{inspect(Map.put(state.inventory, item, state.inventory[item]-amount))}")
           %{state | pending: nil, inventory: Map.put(state.inventory, item, state.inventory[item]-amount)}
         end
 
-        IO.puts("Inventory: #{inspect(state.inventory)}")
+        log("Inventory: #{inspect(state.inventory)}")
         state = %{state | last_instance: i}
         if run_again do
           receive_decisions(state, run_again)
@@ -166,7 +173,7 @@ defmodule InventoryServer do
 
       nil ->
       # if there is no decision, return the state
-       IO.puts("Inventory: #{inspect(state.inventory)}")
+       log("Inventory: #{inspect(state.inventory)}")
        state
     end
   end
@@ -179,11 +186,11 @@ defmodule InventoryServer do
     receive do
       # if the item can successfully be added to the inventory, return :ok
       {:add_to_inventory_ok} ->
-        IO.puts("add_to_inventory_ok")
+        log("add_to_inventory_ok")
         :ok
       # if the item cannot be added to the inventory, return :fail
       {:add_to_inventory_failed} ->
-        IO.puts("add_to_inventory_failed")
+        log("add_to_inventory_failed")
         :fail
       # if the paxos process aborts, return :fail
       {:abort} -> :fail
@@ -196,19 +203,19 @@ defmodule InventoryServer do
 
   # remove item from inventory
   def remove_from_inventory(p, item, amount) do
-    IO.puts("remove_from_inventory, item: #{inspect(item)}, amount: #{inspect(amount)}, p: #{inspect(p)}")
+    log("remove_from_inventory, item: #{inspect(item)}, amount: #{inspect(amount)}, p: #{inspect(p)}")
     # send request to remove item from inventory
     Utils.unicast(p, {:remove_from_inventory, self(), item, amount})
-    IO.puts("remove_from_inventory, item: #{inspect(item)}, amount: #{inspect(amount)}, p: #{inspect(p)}")
+    log("remove_from_inventory, item: #{inspect(item)}, amount: #{inspect(amount)}, p: #{inspect(p)}")
     # wait to receive the response from the process
     receive do
       # if the item can successfully be removed from the inventory, return :ok
       {:remove_from_inventory_ok} ->
-        IO.puts("remove_from_inventory_ok")
+        log("remove_from_inventory_ok")
         :ok
       # if the item cannot be removed from the inventory, return :fail
       {:remove_from_inventory_failed} ->
-        IO.puts("remove_from_inventory_failed")
+        log("remove_from_inventory_failed")
         :fail
       # if the paxos process aborts, return :fail
       {:abort} -> :fail
