@@ -79,7 +79,7 @@ pids = Enum.map(procs, fn p -> InventoryServer.start(p, procs) end)
 5. To add an item to the inventory
 
 ```
-InventoryServer.add_to_inventory(:p0, item, amount)
+InventoryServer.add_to_inventory(:p1, item, amount)
 ```
 
 - where
@@ -89,7 +89,7 @@ InventoryServer.add_to_inventory(:p0, item, amount)
 6. To remove an item from the inventory
 
 ```
-InventoryServer.remove_from_inventory(:p0, item, amount)
+InventoryServer.remove_from_inventory(:p1, item, amount)
 ```
 
 - where
@@ -99,7 +99,7 @@ InventoryServer.remove_from_inventory(:p0, item, amount)
 7. To view the inventory
 
 ```
-InventoryServer.view_inventory(:p0)
+InventoryServer.view_inventory(:p1)
 ```
 
 - where
@@ -157,7 +157,7 @@ InventoryServer.add_to_inventory(:a, item, amount)
 ```
 
 - where
-    - a is replaced with the server number (i.e., :p0, :p1, ...)
+    - a is replaced with the server number (i.e., :p1, :p2, ...)
     - item is replaced with the item number
     - amount is replaced with the amount of the item to be added to the inventory
 
