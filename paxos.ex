@@ -49,7 +49,6 @@ defmodule Paxos do
 
       instances: %{}, #instance -> {pid, [proposal 1, proposal 2]}
       parent_pid: nil,
-      action: nil,
     }
 
     run(state)
@@ -57,7 +56,7 @@ defmodule Paxos do
 
   def run(state) do
     state = receive do
-      {:check_instance, pid, inst, value, action} ->
+      {:check_instance, pid, inst, value} ->
         log("#{inspect(state.name)} proposes inst #{inspect(inst)} with value #{inspect(value)}")
 
         state = %{state | parent_name: pid, parent_pid: pid,}
@@ -74,28 +73,17 @@ defmodule Paxos do
           state
 
         else
-          if action == :increase_ballot_number do
-            log("#{state.name} increasing ballot number")
+          log("checking if instance #{inspect(inst)} is in map of instances")
+          # decision has not been made yet, so check if instance is in map of instances -> proposals
+          Utils.beb_broadcast(state.participants, {:update_instances_map, inst, pid, [value]})
 
-            send(pid, {:timeout});
+          state = if(state.inst == nil) do
+            log("#{inspect(state.name)} has state.inst as nil, so send broadcast for inst #{inspect(inst)} as not running an inst yet")
 
-            %{state| bal: Utils.increment_ballot_number(state.bal, state.name)}
+            send(self(), {:broadcast, pid, inst, value})
+            %{state | inst: inst}
           else
-
-            log("checking if instance #{inspect(inst)} is in map of instances")
-            # decision has not been made yet, so check if instance is in map of instances -> proposals
-            Utils.beb_broadcast(state.participants, {:update_instances_map, inst, pid, [value]})
-
-            state = if(state.inst == nil) do
-              log("#{inspect(state.name)} has state.inst as nil, so send broadcast for inst #{inspect(inst)} as not running an inst yet")
-
-              send(self(), {:broadcast, pid, inst, value})
-              %{state | inst: inst}
-            else
-              state
-            end
-
-            %{state | action: action}
+            state
           end
         end
 
@@ -304,10 +292,6 @@ defmodule Paxos do
 
               state=%{state | acceptedQuorum: 0}
 
-              if state.action == :kill_before_decision do
-                log("#{state.name} going to kill my self because of your actions")
-                Process.exit(self(), :kill)
-              end
               # Broadcast the decision to the parent process (i.e., the process that started Paxos)
               # send(state.parent_name, {:decision, state.a_val})
 
@@ -390,7 +374,6 @@ defmodule Paxos do
 
             prepareCalled: false, # whether prepare has been called
 
-            action: nil,
         }
 
         # now need to check if there are any instances in instance map
@@ -417,11 +400,11 @@ defmodule Paxos do
   # ----------------------------------
   # Application functions
   # ----------------------------------
-  def propose(pid, inst, value, t, action \\ nil) do
+  def propose(pid, inst, value, t) do
     Process.send_after(self(), {:timeout}, t) # start timeout
 
     # need to check whether this instance has a decision
-    send(pid, {:check_instance, self(), inst, value, action})
+    send(pid, {:check_instance, self(), inst, value})
 
     result = receive do
       {:decision, v} ->
