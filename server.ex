@@ -24,7 +24,7 @@ defmodule InventoryServer do
       pax_pid: paxos,
       last_instance: 0,
       sequence: 0,
-      pending: {0, nil},
+      pending: nil,
       inventory: %{1 => 30}, # item_id -> amount
     }
     run(state)
@@ -98,6 +98,7 @@ defmodule InventoryServer do
             send(elem(state.pending, 1), {:add_to_inventory_ok})
             %{state | sequence: state.sequence + 1}
           true ->
+          IO.puts("inside add_to_inventory, pending is: #{inspect(state.pending)}")
             send(elem(state.pending, 1), {:add_to_inventory_failed})
             state
         end
