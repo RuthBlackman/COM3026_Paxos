@@ -1,6 +1,5 @@
-- README file detailing the service API (4 marks)
-- Usage instructions and any assumptions that have been made (3 marks)
-- And safety and liveness properties (3 marks): 10 marks
+- README file detailing the service API?
+- any assumptions that have been made
 
 ### Team Members ###
 
@@ -9,14 +8,11 @@
 
 # About Service #
 
-This service is a simple implementation of an inventory management system using the Paxos algorithm.
-The user can view the items in the inventory, add items to the inventory, and remove items from the inventory.
-
-# Usage of Paxos #
-
-Paxos is used to ensure that the inventory is consistent across all replicas.
-The Paxos algorithm is used to ensure that all users agree on the state of the inventory.
-Each user will have their own instance of Paxos.
+This service is a simple implementation of a distributed inventory management system using the Paxos consensus
+algorithm. The server handles transactions such as adding or removing items from the inventory, as well as viewing the
+inventory by initiating a Paxos process to achieve consensus among distributed nodes. Functions on the client interface
+allow for external processes to interact with the server, sending requests and receiving responses. The Paxos algorithm
+ensures consistent and fault-tolerant decision-making in a distributed environment.
 
 # Safety and Liveness Properties #
 
@@ -47,7 +43,10 @@ Each user will have their own instance of Paxos.
 # Assumptions #
 
 * The service will be run on a trusted machine.
-*
+
+
+* Assumes that the client has reliable behaviour.
+* Assumes that the timeout values allow for enough time to wait for Paxos decisions and client responses.
 
 # Usage Instructions #
 
