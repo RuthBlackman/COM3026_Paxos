@@ -100,7 +100,7 @@ InventoryServer.remove_from_inventory(:p0, item, amount)
 7. To view the inventory
 
 ```
-InventoryServer.view_inventory(:a)
+InventoryServer.view_inventory(:p0)
 ```
 
 - where
@@ -129,7 +129,9 @@ iex --sname clientname
 Node.connect(:"clientname@computername")
 ```
 
-- where clientname is the name of the client and computername is the name of the computer
+- where
+    - clientname is the name of the client
+    - computername is the name of the computer
 
 4. Compile the files
 
