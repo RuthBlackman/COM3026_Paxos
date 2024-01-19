@@ -1,6 +1,3 @@
-- README file detailing the service API?
-- any assumptions that have been made
-
 ### Team Members ###
 
 - Angeliki (Angelique) Baltsoukou - 6634908
@@ -43,10 +40,49 @@ ensures consistent and fault-tolerant decision-making in a distributed environme
 # Assumptions #
 
 * The service will be run on a trusted machine.
-
-
-* Assumes that the client has reliable behaviour.
 * Assumes that the timeout values allow for enough time to wait for Paxos decisions and client responses.
+* Assumes that a client enters one request at a time.
+
+# Server Implementation #
+
+## Viewing the Inventory ## 
+
+- The client sends the ```view_inventory``` request to the server.
+- The server will call ```receive_decisions()```
+- Paxos will call ```get_decisions()``` for the instance.
+- If the decision returns nil then the inventory of the client is up to date and therefore can be returned to the
+  client.
+- If the decision is not nil, then the server will either add or remove the item to the inventory based on the decision
+  made by Paxos.
+- A decision made by Paxos is displayed as ```{:add_to_inventory, {:p1, 0}, 2, 10}```, for example.
+    - The first element is the operation to be performed.
+    - The second element is a tuple of the process and instance of the request.
+    - The third element is the item id.
+    - The fourth element is the item quantity.
+- The server will then call ```receive_decisions()``` until the server retrieves a nil decision, meaning that the
+  client's
+  inventory is up to date.
+- The server will then return the inventory to the client.
+
+## Adding or Removing an Item to the Inventory ##
+
+- The client sends the ```add_to_inventory``` or ```remove_from_inventory``` request to the server.
+- The server checks the amount being proposed is greater than 0.
+- If it is not greater than 0, the server will then return a failure message to the client.
+- If it is greater, the server will then initiate a Paxos proposal.
+- When a decision has been made by Paxos, ```receive_decisions()``` will be called.
+- Paxos will get the decision for the instance.
+- Depending on the decision, the server will add or remove the item to the inventory.
+- If the decision returned by Paxos matches the request made by the client, then a success message will be returned to
+  the client.
+- If the decision returned by Paxos does not match the request made by the client, then a failure message will be
+  returned to the client, because Paxos returned a differnt decision.
+    - This will happen if :p1 makes a request (e.g. to add an item to the inventory) before the client made its request.
+    - Therefore, the client's inventory was not up to date, so Paxos returned an old decision that was then applied to
+      the
+      client's inventory.
+    - The client will then have to make the request again, which will only be successful if its inventory is up to date
+      (i.e there are no more decisions to update the inventory with).
 
 # Usage Instructions #
 
@@ -186,3 +222,4 @@ InventoryServer.view_inventory(:a)
 ```
 pids |> Enum.map(fn p -> Process.exit(p, :kill) end)
 ```
+
