@@ -131,7 +131,7 @@ defmodule Paxos do
 
         #if process is the leader, it will then broadcast prepare
         log("#{inspect(state.name)} broadcast: the leader is #{inspect(state.leader)}")
-        if(state.name == state.leader && state.prepareCalled != true) do #TODO Fix it - may call prepare twice oops fix
+        if(state.name == state.leader && state.prepareCalled != true) do 
           log("#{inspect(pid)} is the leader, so it will broadcast prepare")
       #    Utils.beb_broadcast(state.participants, {:prepare, state.bal + 1, state.name, state.inst}) # first ballot will be 0
           Utils.beb_broadcast(state.participants, {:prepare, Utils.increment_ballot_number(state.bal, state.name),state.name, state.inst })
